@@ -1,0 +1,64 @@
+configuration:
+  ha_url:
+    name: HA URL
+    description: Basis-URL fuer Home Assistant
+  ha_dashboard:
+    name: HA Dashboard
+    description: Optionaler Dashboard-Pfad (z.B. dashboard-player)
+  ha_username:
+    name: HA Benutzername
+    description: Home Assistant Benutzername fuer Auto-Login
+  ha_password:
+    name: HA Passwort
+    description: Home Assistant Passwort fuer Auto-Login
+  dark_mode:
+    name: Dark Mode
+    description: Erzwingt Dark Mode in Chromium
+  ha_theme:
+    name: HA Theme
+    description: Home Assistant Theme-Name (optional)
+  ha_sidebar:
+    name: HA Sidebar
+    description: full | narrow | none | auto
+  hide_sidebar:
+    name: Sidebar ausblenden
+    description: Home Assistant Sidebar ausblenden
+  hide_header:
+    name: Header ausblenden
+    description: Home Assistant Header ausblenden
+  resolution_width:
+    name: Aufloesung Breite
+    description: Display-Breite erzwingen (0 = auto)
+  resolution_height:
+    name: Aufloesung Hoehe
+    description: Display-Hoehe erzwingen (0 = auto)
+  refresh_rate:
+    name: Bildwiederholrate
+    description: Display-Refresh erzwingen (0 = auto)
+  login_delay:
+    name: Login Delay
+    description: Sekunden bis zum Auto-Login-Versuch
+  browser_refresh:
+    name: Browser Refresh
+    description: Sekunden zwischen Refreshes (0 = aus)
+  browser_mod_id:
+    name: Browser Mod ID
+    description: Wert fuer browser_mod-browser-id
+  clear_chromium_on_start:
+    name: Chromium beim Start zuruecksetzen
+    description: Chromium-Profil beim Start zuruecksetzen
+  zoom_level:
+    name: Zoom Level
+    description: 100 = normal
+  screen_timeout:
+    name: Screen Timeout
+    description: Sekunden bis Bildschirm aus (0 = nie)
+  rotate_display:
+    name: Anzeige drehen
+    description: normal | left | right | inverted
+  audio_sink:
+    name: Audio-Ausgabe
+    description: auto | hdmi | usb | none
+  hide_cursor:
+    name: Cursor ausblenden
+    description: Mauszeiger ausblenden

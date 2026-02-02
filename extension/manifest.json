@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "HAOS Kiosk Inject",
+  "version": "1.0.3",
+  "description": "Injects HA kiosk settings and auto-login.",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["config.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["http://*/*", "https://*/*"]
+}

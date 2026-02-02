@@ -1,0 +1,106 @@
+name: HAOS Chromium Kiosk
+slug: haos-chromium-kiosk
+description: Chromium-based kiosk display for HAOS HDMI output.
+version: "0.1.51"
+url: "https://github.com/speedy3wk/haos-chromium-kiosk"
+arch:
+  - amd64
+  - aarch64
+  - armv7
+  - armhf
+startup: application
+boot: auto
+init: false
+host_network: true
+ingress: true
+homeassistant_api: true
+auth_api: true
+audio: true
+usb: true
+environment:
+  DISPLAY: ":0"
+privileged:
+  - SYS_ADMIN
+devices:
+  - /dev/dri/card0
+  - /dev/dri/card1
+  - /dev/dri/renderD128
+  - /dev/fb0
+  - /dev/tty0
+  - /dev/input/event0
+  - /dev/input/event1
+  - /dev/input/event2
+  - /dev/input/event3
+  - /dev/input/event4
+  - /dev/input/event5
+  - /dev/input/event6
+  - /dev/input/event7
+  - /dev/input/event8
+  - /dev/input/event9
+  - /dev/input/event10
+  - /dev/input/event11
+  - /dev/input/event12
+  - /dev/input/event13
+  - /dev/input/event14
+  - /dev/input/event15
+  - /dev/input/event16
+  - /dev/input/event17
+  - /dev/input/event18
+  - /dev/input/event19
+  - /dev/input/event20
+  - /dev/input/event21
+  - /dev/input/event22
+  - /dev/input/event23
+  - /dev/input/event24
+  - /dev/input/event25
+  - /dev/snd
+ulimits:
+  nofile:
+    soft: 65536
+    hard: 65536
+options:
+  ha_url: "http://homeassistant:8123"
+  ha_dashboard: ""
+  ha_username: ""
+  ha_password: ""
+  dark_mode: true
+  ha_theme: ""
+  ha_sidebar: "full"
+  hide_sidebar: false
+  hide_header: false
+  resolution_width: 0
+  resolution_height: 0
+  refresh_rate: 0
+  login_delay: 2
+  browser_refresh: 0
+  browser_mod_id: "haos_kiosk"
+  clear_chromium_on_start: false
+  zoom_level: 100
+  screen_timeout: 0
+  rotate_display: "normal"
+  audio_sink: "auto"
+  hide_cursor: true
+schema:
+  ha_url: str
+  ha_dashboard: str
+  ha_username: str
+  ha_password: str
+  dark_mode: bool
+  ha_theme: str
+  ha_sidebar: list(full|narrow|none|auto)
+  hide_sidebar: bool
+  hide_header: bool
+  resolution_width: int
+  resolution_height: int
+  refresh_rate: int
+  login_delay: int
+  browser_refresh: int
+  browser_mod_id: str
+  clear_chromium_on_start: bool
+  zoom_level: int
+  screen_timeout: int
+  rotate_display: list(normal|left|right|inverted)
+  audio_sink: list(auto|hdmi|usb|none)
+  hide_cursor: bool
+map:
+  - addon_config:rw
