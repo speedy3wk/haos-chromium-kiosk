@@ -1,7 +1,7 @@
 # HAOS Chromium Kiosk
 
 Chromium-based kiosk add-on for HAOS HDMI output. Designed to display a Lovelace panel view in kiosk aka Fullscreen mode.
-Large parts of the code are inspired by the HAOS Kiosk Addon from https://github.com/puterboy/HAOS-kiosk/tree/main. 
+Large parts of the code are inspired by the HAOS Kiosk Addon from https://github.com/puterboy/HAOS-kiosk/. 
 
 ## Features
 - Chromium in kiosk mode on the HAOS host HDMI output
