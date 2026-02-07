@@ -86,6 +86,14 @@ fi
 
 bashio::log.info "haos-kiosk: ha_url=$HA_URL"
 bashio::log.info "haos-kiosk: ha_dashboard=$HA_DASHBOARD"
+bashio::log.info "haos-kiosk: ha_dashboard_full=$HA_URL_BASE"
+if [ -n "$HA_DASHBOARD" ]; then
+  case "$HA_DASHBOARD" in
+    lovelace*|dashboard*|hassio*|addon*|developer-tools*|config*)
+      bashio::log.warning "haos-kiosk: ha_dashboard looks like a legacy or internal path; verify it still resolves on HA 2026.2+"
+      ;;
+  esac
+fi
 bashio::log.info "haos-kiosk: dark_mode=$DARK_MODE ha_sidebar=$HA_SIDEBAR hide_sidebar=$HIDE_SIDEBAR hide_header=$HIDE_HEADER"
 bashio::log.info "haos-kiosk: resolution=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT} refresh_rate=$REFRESH_RATE"
 bashio::log.info "haos-kiosk: browser_refresh=$BROWSER_REFRESH browser_mod_id=$BROWSER_MOD_ID"

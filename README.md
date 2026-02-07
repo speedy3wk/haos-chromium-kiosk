@@ -36,6 +36,7 @@ Large parts of the code are inspired by the HAOS Kiosk Addon from https://github
 ## Notes
 - Auto-login and UI tweaks are injected via a bundled Chromium extension.
 - Startup logs include connectivity checks to the configured `ha_url`.
+- Home Assistant 2026.2+ moved some dashboard and add-on panels; if the kiosk shows a redirect or blank panel, review `ha_dashboard` to match the new dashboard/app panel URL.
 - Created with AI tools, reviewed and tested by me.
 
 ## Installation (Custom Add-on Repository)
