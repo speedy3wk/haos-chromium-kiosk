@@ -1,7 +1,7 @@
 # HAOS Chromium Kiosk
 
-Chromium-based kiosk add-on for HAOS HDMI output. Designed to display a Lovelace panel view in kiosk aka Fullscreen mode.
-Large parts of the code are inspired by the HAOS Kiosk Addon from https://github.com/puterboy/HAOS-kiosk/. 
+Chromium-based kiosk app for HAOS HDMI output. Designed to display a Lovelace panel view in kiosk aka Fullscreen mode.
+Large parts of the code are inspired by the HAOS Kiosk App from https://github.com/puterboy/HAOS-kiosk/. 
 
 ## Features
 - Chromium in kiosk mode on the HAOS host HDMI output
@@ -36,14 +36,14 @@ Large parts of the code are inspired by the HAOS Kiosk Addon from https://github
 ## Notes
 - Auto-login and UI tweaks are injected via a bundled Chromium extension.
 - Startup logs include connectivity checks to the configured `ha_url`.
-- Home Assistant 2026.2+ moved some dashboard and add-on panels; if the kiosk shows a redirect or blank panel, review `ha_dashboard` to match the new dashboard/app panel URL.
+- Home Assistant 2026.2+ moved some dashboard and app panels; if the kiosk shows a redirect or blank panel, review `ha_dashboard` to match the new dashboard/app panel URL.
 - Created with AI tools, reviewed and tested by me.
 
-## Installation (Custom Add-on Repository)
-1. In Home Assistant, go to Settings -> Add-ons -> Add-on Store.
+## Installation (Custom App Repository)
+1. In Home Assistant, go to Settings -> Apps -> Install App (App-Store).
 2. Open the three-dot menu -> Repositories.
 3. Add this repository URL: `https://github.com/speedy3wk/haos-chromium-kiosk`
-4. Refresh the Add-on Store and install "HAOS Chromium Kiosk".
+4. Refresh the App-Store and install "HAOS Chromium Kiosk".
 
 ## HACS
-This is an unofficial add-on and is not listed in HACS. Install it via the Custom Add-on Repository method above.
+This is an unofficial app and is not listed in HACS. Install it via the Custom App Repository method above.
