@@ -177,8 +177,128 @@
     return null;
   }
 
+  function pickFirstDeep(selectors) {
+    for (const selector of selectors) {
+      const found = queryDeep(selector);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  function dispatchComposed(target, type) {
+    if (!target || !target.dispatchEvent) {
+      return;
+    }
+    target.dispatchEvent(new Event(type, { bubbles: true, composed: true }));
+  }
+
+  function findAuthFields() {
+    const usernameField = pickFirstDeep([
+      "ha-input[name='username']",
+      "ha-input[autocomplete='username']",
+      "ha-auth-textfield[name='username']",
+      "ha-textfield[name='username']",
+      "input[name='username']",
+      "input[autocomplete='username']"
+    ]);
+
+    const passwordField = pickFirstDeep([
+      "ha-input[name='password']",
+      "ha-input[autocomplete='current-password']",
+      "ha-auth-textfield[name='password']",
+      "ha-textfield[name='password']",
+      "input[name='password']",
+      "input[autocomplete='current-password']",
+      "input[type='password']"
+    ]);
+
+    return { usernameField, passwordField };
+  }
+
+  function setFieldValue(field, value) {
+    if (!field) {
+      return;
+    }
+
+    try {
+      if ("value" in field) {
+        field.value = value;
+      }
+    } catch (_err) {
+      // ignore value assignment failures on non-standard elements
+    }
+
+    if (field.shadowRoot) {
+      const innerInput = field.shadowRoot.querySelector("input");
+      if (innerInput) {
+        innerInput.value = value;
+        dispatchComposed(innerInput, "input");
+        dispatchComposed(innerInput, "change");
+      }
+    }
+
+    dispatchComposed(field, "input");
+    dispatchComposed(field, "change");
+  }
+
+  function setPersistCheckbox() {
+    const checkbox = pickFirstDeep([
+      "ha-checkbox",
+      "mwc-checkbox",
+      "input[type='checkbox']"
+    ]);
+
+    if (!checkbox) {
+      return;
+    }
+
+    if (checkbox.tagName && checkbox.tagName.toLowerCase() === "input") {
+      checkbox.checked = true;
+    } else if ("checked" in checkbox) {
+      checkbox.checked = true;
+    } else {
+      checkbox.setAttribute("checked", "");
+    }
+
+    dispatchComposed(checkbox, "input");
+    dispatchComposed(checkbox, "change");
+  }
+
+  function submitAuthForm() {
+    const submitButton = pickFirstDeep([
+      ".action ha-button",
+      ".action mwc-button",
+      "ha-button[type='submit']",
+      "mwc-button[type='submit']",
+      "button[type='submit']",
+      "ha-button",
+      "mwc-button",
+      "button"
+    ]);
+
+    if (submitButton && submitButton.click) {
+      submitButton.click();
+      return true;
+    }
+
+    const form = queryDeep("form");
+    if (!form) {
+      return false;
+    }
+
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+      return true;
+    }
+
+    form.dispatchEvent(new Event("submit", { bubbles: true, composed: true, cancelable: true }));
+    return true;
+  }
+
   function attemptAutoLogin() {
-    if (window.__haosKioskLoginTried) {
+    if (window.__haosKioskLoginSubmitted || window.__haosKioskLoginAttemptRunning) {
       return;
     }
     if (!username || !password) {
@@ -189,44 +309,35 @@
       return;
     }
 
-    window.__haosKioskLoginTried = true;
+    window.__haosKioskLoginAttemptRunning = true;
     let tries = 0;
+    const maxTries = 30;
 
     function attempt() {
-      tries += 1;
-      const usernameField = queryDeep("input[autocomplete='username']");
-      const passwordField = queryDeep("input[autocomplete='current-password']") ||
-        queryDeep("input[type='password']");
-      const haCheckbox = queryDeep("ha-checkbox") ||
-        queryDeep("mwc-checkbox") ||
-        queryDeep("input[type='checkbox']");
-      const submitButton = queryDeep("ha-button, mwc-button, button[type='submit']");
-
-      if (usernameField && passwordField && submitButton) {
-        usernameField.value = username;
-        usernameField.dispatchEvent(new Event("input", { bubbles: true }));
-        usernameField.dispatchEvent(new Event("change", { bubbles: true }));
-
-        passwordField.value = password;
-        passwordField.dispatchEvent(new Event("input", { bubbles: true }));
-        passwordField.dispatchEvent(new Event("change", { bubbles: true }));
-
-        if (haCheckbox) {
-          if (haCheckbox.tagName && haCheckbox.tagName.toLowerCase() === "input") {
-            haCheckbox.checked = true;
-          } else {
-            haCheckbox.setAttribute("checked", "");
-          }
-          haCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
-          haCheckbox.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-
-        submitButton.click();
+      if (window.__haosKioskLoginSubmitted) {
+        window.__haosKioskLoginAttemptRunning = false;
         return;
       }
 
-      if (tries < 10) {
+      tries += 1;
+      const { usernameField, passwordField } = findAuthFields();
+
+      if (usernameField && passwordField) {
+        setFieldValue(usernameField, username);
+        setFieldValue(passwordField, password);
+        setPersistCheckbox();
+
+        if (submitAuthForm()) {
+          window.__haosKioskLoginSubmitted = true;
+          window.__haosKioskLoginAttemptRunning = false;
+          return;
+        }
+      }
+
+      if (tries < maxTries) {
         setTimeout(attempt, 500);
+      } else {
+        window.__haosKioskLoginAttemptRunning = false;
       }
     }
 
