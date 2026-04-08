@@ -35,18 +35,21 @@ configuration:
   refresh_rate:
     name: Bildwiederholrate
     description: Display-Refresh erzwingen (0 = auto)
+  video_profile_preset:
+    name: Video Profil Preset
+    description: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc
   hdr_mode:
     name: HDR Modus
-    description: auto | off | on (best-effort)
+    description: auto | off | on (best-effort, vor allem fuer custom)
   color_space:
     name: Farbraum
-    description: auto | rgb | yuv444 | yuv422 | yuv420
+    description: auto | rgb | yuv444 | yuv422 | yuv420 (vor allem fuer custom)
   color_profile:
     name: Farbprofil
-    description: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater
+    description: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater (vor allem fuer custom)
   rgb_range:
     name: RGB Bereich
-    description: auto | full | limited (nur bei color_space=rgb)
+    description: auto | full | limited (nur bei color_space=rgb, vor allem fuer custom)
   force_output_on:
     name: Ausgang erzwingen
     description: Versucht den Ausgang aktiv zu halten (Software-EDID-Ghost)

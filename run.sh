@@ -41,6 +41,7 @@ load_config_var hide_header false
 load_config_var resolution_width 0
 load_config_var resolution_height 0
 load_config_var refresh_rate 0
+load_config_var video_profile_preset "custom"
 load_config_var hdr_mode "auto"
 load_config_var color_space "auto"
 load_config_var color_profile "auto"
@@ -55,6 +56,38 @@ load_config_var screen_timeout 0
 load_config_var rotate_display "normal"
 load_config_var audio_sink "auto"
 load_config_var hide_cursor true
+
+apply_video_profile_preset() {
+  case "$VIDEO_PROFILE_PRESET" in
+    custom|"")
+      return 0
+      ;;
+    sdr_rgb_limited)
+      HDR_MODE="off"
+      COLOR_SPACE="rgb"
+      COLOR_PROFILE="default"
+      RGB_RANGE="limited"
+      ;;
+    sdr_bt709_ycc)
+      HDR_MODE="off"
+      COLOR_SPACE="yuv422"
+      COLOR_PROFILE="bt709"
+      RGB_RANGE="auto"
+      ;;
+    hdr_bt2020_ycc)
+      HDR_MODE="on"
+      COLOR_SPACE="yuv422"
+      COLOR_PROFILE="bt2020_ycc"
+      RGB_RANGE="auto"
+      ;;
+    *)
+      bashio::log.warning "haos-kiosk: unknown video_profile_preset='$VIDEO_PROFILE_PRESET', using custom"
+      VIDEO_PROFILE_PRESET="custom"
+      ;;
+  esac
+}
+
+apply_video_profile_preset
 
 HA_URL_BASE="$HA_URL"
 HA_URL_BASE="${HA_URL_BASE%/}"
@@ -101,6 +134,7 @@ if [ -n "$HA_DASHBOARD" ]; then
 fi
 bashio::log.info "haos-kiosk: dark_mode=$DARK_MODE ha_sidebar=$HA_SIDEBAR hide_sidebar=$HIDE_SIDEBAR hide_header=$HIDE_HEADER"
 bashio::log.info "haos-kiosk: resolution=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT} refresh_rate=$REFRESH_RATE"
+bashio::log.info "haos-kiosk: video_profile_preset=$VIDEO_PROFILE_PRESET"
 bashio::log.info "haos-kiosk: hdr_mode=$HDR_MODE color_space=$COLOR_SPACE color_profile=$COLOR_PROFILE rgb_range=$RGB_RANGE force_output_on=$FORCE_OUTPUT_ON"
 bashio::log.info "haos-kiosk: browser_refresh=$BROWSER_REFRESH browser_mod_id=$BROWSER_MOD_ID"
 bashio::log.info "haos-kiosk: rotate_display=$ROTATE_DISPLAY zoom_level=$ZOOM_LEVEL screen_timeout=$SCREEN_TIMEOUT"
@@ -230,6 +264,14 @@ if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
 fi
 
 if [ -z "$selected_card" ]; then
+  fallback_card_path="$(find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sort | head -n1 || true)"
+  if [ -n "$fallback_card_path" ]; then
+    selected_card="${fallback_card_path##*/}"
+    bashio::log.warning "haos-kiosk: no connected output detected at startup; using $selected_card and waiting for output availability"
+  fi
+fi
+
+if [ -z "$selected_card" ]; then
   bashio::log.error "ERROR: No connected video card detected. Exiting.."
   exit 1
 fi
@@ -307,13 +349,7 @@ if [ -z "$ACTIVE_OUTPUT" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
 fi
 
 if [ -z "$ACTIVE_OUTPUT" ]; then
-  bashio::log.error "haos-kiosk: no xrandr output detected"
-  exit 1
-fi
-
-if [ "$FORCE_OUTPUT_ON" = true ]; then
-  bashio::log.info "haos-kiosk: forcing xrandr output on: $ACTIVE_OUTPUT"
-  xrandr --output "$ACTIVE_OUTPUT" --auto --primary || true
+  bashio::log.warning "haos-kiosk: no active xrandr output detected yet; waiting for HDMI/AVR availability"
 fi
 
 log_xrandr_output_capabilities() {
@@ -360,7 +396,7 @@ log_xrandr_output_capabilities() {
   return 0
 }
 
-log_xrandr_output_capabilities "$ACTIVE_OUTPUT"
+LAST_CAPS_OUTPUT=""
 
 xrandr_output_has_property() {
   local output="$1"
@@ -447,6 +483,7 @@ apply_color_space() {
   local color_profile_key="${COLOR_PROFILE,,}"
   local color_profile_value=""
   local rgb_range_value="${RGB_RANGE,,}"
+  local explicit_profile_is_ycc=false
 
   apply_rgb_range_for_rgb_mode() {
     case "$rgb_range_value" in
@@ -507,6 +544,17 @@ apply_color_space() {
     esac
   }
 
+  detect_explicit_profile_type() {
+    case "$color_profile_key" in
+      bt709|bt2020_ycc|bt2020_cycc|smpte170m|xvycc_709|xvycc_601|sycc_601|opycc_601)
+        explicit_profile_is_ycc=true
+        ;;
+      *)
+        explicit_profile_is_ycc=false
+        ;;
+    esac
+  }
+
   apply_explicit_color_profile() {
     if [ -z "$property" ] || [ -z "$color_profile_value" ]; then
       return 1
@@ -543,10 +591,17 @@ apply_color_space() {
   done
 
   resolve_color_profile_value
+  detect_explicit_profile_type
 
   if apply_explicit_color_profile; then
     if [ "$target" = "rgb" ]; then
-      apply_rgb_range_for_rgb_mode
+      if [ "$explicit_profile_is_ycc" = true ]; then
+        if [ "$rgb_range_value" != "auto" ]; then
+          bashio::log.info "haos-kiosk: rgb_range is ignored because color_profile='$COLOR_PROFILE' is YCC-based"
+        fi
+      else
+        apply_rgb_range_for_rgb_mode
+      fi
     elif [ "$rgb_range_value" != "auto" ]; then
       bashio::log.info "haos-kiosk: rgb_range is ignored unless color_space=rgb"
     fi
@@ -598,26 +653,105 @@ apply_color_space() {
   fi
 }
 
-bashio::log.info "Setting display rotation: $ROTATE_DISPLAY"
-case "$ROTATE_DISPLAY" in
-  left) xrandr --output "$ACTIVE_OUTPUT" --rotate left ;;
-  right) xrandr --output "$ACTIVE_OUTPUT" --rotate right ;;
-  inverted) xrandr --output "$ACTIVE_OUTPUT" --rotate inverted ;;
-  *) xrandr --output "$ACTIVE_OUTPUT" --rotate normal ;;
-esac
+read_xrandr_property_value() {
+  local output="$1"
+  local property="$2"
+  xrandr --verbose | awk -v output="$output" -v property="$property" '
+    $1 == output && ($2 == "connected" || $2 == "disconnected") { in_output = 1; next }
+    in_output && $0 ~ /^[^ \t]/ { exit }
+    in_output {
+      line = $0
+      sub(/^[ \t]+/, "", line)
+      if (index(line, property ":") == 1) {
+        sub("^" property ":[ \\t]*", "", line)
+        split(line, parts, /[ \\t]+/)
+        print parts[1]
+        exit
+      }
+    }
+  '
+}
 
-if [ "$RESOLUTION_WIDTH" -gt 0 ] && [ "$RESOLUTION_HEIGHT" -gt 0 ]; then
-  bashio::log.info "Setting resolution: ${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}"
-  if [ "$REFRESH_RATE" -gt 0 ]; then
-    bashio::log.info "Setting refresh rate: ${REFRESH_RATE}"
-    xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" --rate "$REFRESH_RATE" || true
-  else
-    xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" || true
+recover_bad_link_status() {
+  local status
+  status="$(read_xrandr_property_value "$ACTIVE_OUTPUT" "link-status" || true)"
+  if [ "$status" != "Bad" ]; then
+    return 0
   fi
-fi
 
-apply_hdr_mode
-apply_color_space "$COLOR_SPACE"
+  bashio::log.warning "haos-kiosk: link-status became Bad, attempting safe HDMI recovery"
+  if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
+  fi
+  if xrandr_output_has_property "$ACTIVE_OUTPUT" "Colorspace"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "Default" || true
+  elif xrandr_output_has_property "$ACTIVE_OUTPUT" "ColorSpace"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "Default" || true
+  elif xrandr_output_has_property "$ACTIVE_OUTPUT" "color space"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "Default" || true
+  fi
+  if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
+  fi
+  xrandr --output "$ACTIVE_OUTPUT" --auto || true
+}
+
+pick_active_output() {
+  local output
+  output="$(xrandr | awk '/ connected/{print $1; exit}')"
+  if [ -z "$output" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
+    output="$(xrandr | awk '/ disconnected/{print $1; exit}')"
+  fi
+  echo "$output"
+}
+
+configure_display_output() {
+  local reason="$1"
+  local output
+  output="$(pick_active_output)"
+  if [ -z "$output" ]; then
+    return 1
+  fi
+
+  ACTIVE_OUTPUT="$output"
+  bashio::log.info "haos-kiosk: initializing output '$ACTIVE_OUTPUT' ($reason)"
+
+  if [ "$FORCE_OUTPUT_ON" = true ]; then
+    xrandr --output "$ACTIVE_OUTPUT" --auto --primary || true
+  fi
+
+  if [ "$LAST_CAPS_OUTPUT" != "$ACTIVE_OUTPUT" ]; then
+    log_xrandr_output_capabilities "$ACTIVE_OUTPUT"
+    LAST_CAPS_OUTPUT="$ACTIVE_OUTPUT"
+  fi
+
+  bashio::log.info "Setting display rotation: $ROTATE_DISPLAY"
+  case "$ROTATE_DISPLAY" in
+    left) xrandr --output "$ACTIVE_OUTPUT" --rotate left || true ;;
+    right) xrandr --output "$ACTIVE_OUTPUT" --rotate right || true ;;
+    inverted) xrandr --output "$ACTIVE_OUTPUT" --rotate inverted || true ;;
+    *) xrandr --output "$ACTIVE_OUTPUT" --rotate normal || true ;;
+  esac
+
+  if [ "$RESOLUTION_WIDTH" -gt 0 ] && [ "$RESOLUTION_HEIGHT" -gt 0 ]; then
+    bashio::log.info "Setting resolution: ${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}"
+    if [ "$REFRESH_RATE" -gt 0 ]; then
+      bashio::log.info "Setting refresh rate: ${REFRESH_RATE}"
+      xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" --rate "$REFRESH_RATE" || true
+    else
+      xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" || true
+    fi
+  fi
+
+  apply_hdr_mode
+  apply_color_space "$COLOR_SPACE"
+  recover_bad_link_status
+  return 0
+}
+
+if ! configure_display_output "startup"; then
+  bashio::log.warning "haos-kiosk: startup completed without active output; waiting for reconnect"
+fi
 
 if [ "$SCREEN_TIMEOUT" -gt 0 ]; then
   bashio::log.info "Setting screen timeout: $SCREEN_TIMEOUT"
@@ -762,6 +896,35 @@ bashio::log.info "Starting Chromium watchdog"
       launch_chromium
     fi
     sleep 10
+  done
+) &
+
+bashio::log.info "Starting output reconnect monitor"
+(
+  last_seen_output="$ACTIVE_OUTPUT"
+  while true; do
+    current_output="$(pick_active_output)"
+
+    if [ -z "$current_output" ]; then
+      if [ -n "$last_seen_output" ]; then
+        bashio::log.warning "haos-kiosk: output became unavailable; waiting for it to return"
+        last_seen_output=""
+      fi
+      sleep 5
+      continue
+    fi
+
+    if [ "$current_output" != "$last_seen_output" ]; then
+      bashio::log.info "haos-kiosk: output available: $current_output (reinitializing)"
+      if configure_display_output "reconnect"; then
+        last_seen_output="$current_output"
+      fi
+    else
+      ACTIVE_OUTPUT="$current_output"
+      recover_bad_link_status || true
+    fi
+
+    sleep 5
   done
 ) &
 

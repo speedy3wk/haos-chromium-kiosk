@@ -23,6 +23,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `resolution_width`: Force display width (0 = auto)
 - `resolution_height`: Force display height (0 = auto)
 - `refresh_rate`: Force display refresh rate (0 = auto)
+- `video_profile_preset`: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc
 - `hdr_mode`: auto | off | on (best-effort via xrandr properties)
 - `color_space`: auto | rgb | yuv444 | yuv422 | yuv420
 - `color_profile`: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater
@@ -41,6 +42,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 ## Notes
 - Auto-login and UI tweaks are injected via a bundled Chromium extension.
 - Startup logs include connectivity checks to the configured `ha_url`.
+- `video_profile_preset` is the recommended GUI entry point. Advanced color options are primarily for `custom`.
 - Home Assistant 2026.2+ moved some dashboard and app panels; if the kiosk shows a redirect or blank panel, review `ha_dashboard` to match the new dashboard/app panel URL.
 - Created with AI tools, reviewed and tested by me.
 
