@@ -23,7 +23,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `resolution_width`: Force display width (0 = auto)
 - `resolution_height`: Force display height (0 = auto)
 - `refresh_rate`: Force display refresh rate (0 = auto)
-- `video_profile_preset`: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc
+- `video_profile_preset`: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
 - `hdr_mode`: auto | off | on (best-effort via xrandr properties)
 - `color_space`: auto | rgb | yuv444 | yuv422 | yuv420
 - `color_profile`: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater
@@ -51,6 +51,9 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `color_profile != auto` has priority over `color_space` mapping.
 - `rgb_range` only applies to RGB output paths; it is ignored for YCC-based profiles.
 - To avoid HDMI re-sync flashes between sources, align both sources to the same output style (resolution/refresh/HDR/color family).
+
+### Practical Tip
+- For NVIDIA Shield configured as 4K 59.94Hz YUV420 Rec.2020, start with `video_profile_preset=match_shield_bt2020`.
 
 ## Installation (Custom App Repository)
 1. In Home Assistant, go to Settings -> Apps -> Install App (App-Store).

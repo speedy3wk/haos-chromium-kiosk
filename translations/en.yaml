@@ -37,18 +37,18 @@ configuration:
     description: Force display refresh rate (0 = auto)
   video_profile_preset:
     name: Video Profile Preset
-    description: Main switch. non-custom overrides advanced color options.
+    description: Main switch. custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
   hdr_mode:
-    name: Advanced: HDR Mode
+    name: Advanced HDR Mode
     description: Used with preset=custom. auto | off | on
   color_space:
-    name: Advanced: Color Space
+    name: Advanced Color Space
     description: Used with preset=custom. auto | rgb | yuv444 | yuv422 | yuv420
   color_profile:
-    name: Advanced: Color Profile
+    name: Advanced Color Profile
     description: Used with preset=custom. If not auto, this has priority over color_space.
   rgb_range:
-    name: Advanced: RGB Range
+    name: Advanced RGB Range
     description: Used with preset=custom and RGB path only. auto | full | limited
   force_output_on:
     name: Force Output On

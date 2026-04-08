@@ -80,6 +80,12 @@ apply_video_profile_preset() {
       COLOR_PROFILE="bt2020_ycc"
       RGB_RANGE="auto"
       ;;
+    match_shield_bt2020)
+      HDR_MODE="on"
+      COLOR_SPACE="yuv420"
+      COLOR_PROFILE="bt2020_ycc"
+      RGB_RANGE="auto"
+      ;;
     *)
       bashio::log.warning "haos-kiosk: unknown video_profile_preset='$VIDEO_PROFILE_PRESET', using custom"
       VIDEO_PROFILE_PRESET="custom"

@@ -37,18 +37,18 @@ configuration:
     description: Display-Refresh erzwingen (0 = auto)
   video_profile_preset:
     name: Video Profil Preset
-    description: Hauptschalter. Bei ungleich custom werden Advanced-Optionen ueberschrieben.
+    description: Hauptschalter. custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
   hdr_mode:
-    name: Advanced: HDR Modus
+    name: Advanced HDR Modus
     description: Nur bei preset=custom. auto | off | on
   color_space:
-    name: Advanced: Farbraum
+    name: Advanced Farbraum
     description: Nur bei preset=custom. auto | rgb | yuv444 | yuv422 | yuv420
   color_profile:
-    name: Advanced: Farbprofil
+    name: Advanced Farbprofil
     description: Nur bei preset=custom. Wenn nicht auto, hat es Vorrang vor color_space.
   rgb_range:
-    name: Advanced: RGB Bereich
+    name: Advanced RGB Bereich
     description: Nur bei preset=custom und RGB-Pfad. auto | full | limited
   force_output_on:
     name: Ausgang erzwingen
