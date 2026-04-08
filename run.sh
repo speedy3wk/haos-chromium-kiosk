@@ -315,15 +315,46 @@ fi
 
 log_xrandr_output_capabilities() {
   local output="$1"
-  bashio::log.info "haos-kiosk: xrandr capabilities for output: $output"
-  xrandr --verbose | awk -v output="$output" '
-    $1 == output && ($2 == "connected" || $2 == "disconnected") { in_output = 1; print; next }
-    in_output && $0 ~ /^[^ \t]/ { exit }
-    in_output { print }
-  ' | while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    bashio::log.info "haos-kiosk: xrandr[$output] $line"
-  done
+  local in_output=false
+  local line
+  local trimmed
+  local next_supported=false
+
+  bashio::log.info "haos-kiosk: xrandr capability summary for output: $output"
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^${output}[[:space:]]+(connected|disconnected) ]]; then
+      in_output=true
+      bashio::log.info "haos-kiosk: xrandr[$output] ${line//$'\t'/ }"
+      continue
+    fi
+
+    if [ "$in_output" = false ]; then
+      continue
+    fi
+
+    if [[ "$line" =~ ^[^[:space:]] ]]; then
+      break
+    fi
+
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+
+    if [ "$next_supported" = true ]; then
+      if [[ "$trimmed" == supported:* ]]; then
+        bashio::log.info "haos-kiosk: xrandr[$output] $trimmed"
+      fi
+      next_supported=false
+      continue
+    fi
+
+    case "$trimmed" in
+      "max bpc:"*|"Colorspace:"*|"ColorSpace:"*|"Broadcast RGB:"*|"content type:"*|"link-status:"*)
+        bashio::log.info "haos-kiosk: xrandr[$output] $trimmed"
+        next_supported=true
+        ;;
+    esac
+  done < <(xrandr --verbose 2>/dev/null || true)
+
+  return 0
 }
 
 log_xrandr_output_capabilities "$ACTIVE_OUTPUT"
