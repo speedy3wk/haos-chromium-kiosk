@@ -22,7 +22,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `hide_header`: Hide Home Assistant header
 - `resolution_width`: Force display width (0 = auto)
 - `resolution_height`: Force display height (0 = auto)
-- `refresh_rate`: Force display refresh rate (0 = auto)
+- `refresh_rate`: Force display refresh rate (0 = auto, decimals like 59.94 supported)
 - `video_profile_preset`: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
 - `hdr_mode`: auto | off | on (best-effort via xrandr properties)
 - `color_space`: auto | rgb | yuv444 | yuv422 | yuv420

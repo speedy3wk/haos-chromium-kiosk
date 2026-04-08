@@ -757,7 +757,7 @@ configure_display_output() {
 
   if [ "$RESOLUTION_WIDTH" -gt 0 ] && [ "$RESOLUTION_HEIGHT" -gt 0 ]; then
     bashio::log.info "Setting resolution: ${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}"
-    if [ "$REFRESH_RATE" -gt 0 ]; then
+    if awk -v r="$REFRESH_RATE" 'BEGIN { exit !(r+0 > 0) }'; then
       bashio::log.info "Setting refresh rate: ${REFRESH_RATE}"
       xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" --rate "$REFRESH_RATE" || true
     else
