@@ -42,6 +42,7 @@ load_config_var resolution_width 0
 load_config_var resolution_height 0
 load_config_var refresh_rate 0
 load_config_var video_profile_preset "custom"
+load_config_var software_rendering false
 load_config_var hdr_mode "auto"
 load_config_var color_space "auto"
 load_config_var color_profile "auto"
@@ -61,6 +62,12 @@ apply_video_profile_preset() {
   case "$VIDEO_PROFILE_PRESET" in
     custom|"")
       return 0
+      ;;
+    passthrough)
+      HDR_MODE="auto"
+      COLOR_SPACE="auto"
+      COLOR_PROFILE="auto"
+      RGB_RANGE="auto"
       ;;
     sdr_rgb_limited)
       HDR_MODE="off"
@@ -141,6 +148,7 @@ fi
 bashio::log.info "haos-kiosk: dark_mode=$DARK_MODE ha_sidebar=$HA_SIDEBAR hide_sidebar=$HIDE_SIDEBAR hide_header=$HIDE_HEADER"
 bashio::log.info "haos-kiosk: resolution=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT} refresh_rate=$REFRESH_RATE"
 bashio::log.info "haos-kiosk: video_profile_preset=$VIDEO_PROFILE_PRESET"
+bashio::log.info "haos-kiosk: software_rendering=$SOFTWARE_RENDERING"
 bashio::log.info "haos-kiosk: hdr_mode=$HDR_MODE color_space=$COLOR_SPACE color_profile=$COLOR_PROFILE rgb_range=$RGB_RANGE force_output_on=$FORCE_OUTPUT_ON"
 bashio::log.info "haos-kiosk: browser_refresh=$BROWSER_REFRESH browser_mod_id=$BROWSER_MOD_ID"
 bashio::log.info "haos-kiosk: rotate_display=$ROTATE_DISPLAY zoom_level=$ZOOM_LEVEL screen_timeout=$SCREEN_TIMEOUT"
@@ -805,6 +813,11 @@ fi
 
 launch_chromium() {
   mkdir -p /data/chromium
+  local SOFTWARE_FLAGS=""
+  if [ "$SOFTWARE_RENDERING" = true ]; then
+    SOFTWARE_FLAGS="--disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode --use-gl=swiftshader"
+  fi
+
   chromium \
     --no-sandbox \
     --disable-dev-shm-usage \
@@ -821,6 +834,7 @@ launch_chromium() {
     --kiosk \
     --start-fullscreen \
     --user-data-dir=/data/chromium \
+    $SOFTWARE_FLAGS \
     --force-device-scale-factor=$(echo "scale=2; $ZOOM_LEVEL/100" | bc -l) \
     "$HA_URL_BASE" &
 }
