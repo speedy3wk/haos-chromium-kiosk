@@ -403,6 +403,7 @@ log_xrandr_output_capabilities() {
 }
 
 LAST_CAPS_OUTPUT=""
+LAST_FULL_COLOR_APPLY_OUTPUT=""
 
 xrandr_output_has_property() {
   local output="$1"
@@ -724,6 +725,7 @@ pick_active_output() {
 configure_display_output() {
   local reason="$1"
   local output
+  local apply_full_color_stack=true
   output="$(pick_active_output)"
   if [ -z "$output" ]; then
     return 1
@@ -732,11 +734,18 @@ configure_display_output() {
   ACTIVE_OUTPUT="$output"
   bashio::log.info "haos-kiosk: initializing output '$ACTIVE_OUTPUT' ($reason)"
 
+  if [ "$reason" = "reconnect" ] && [ "$ACTIVE_OUTPUT" = "$LAST_FULL_COLOR_APPLY_OUTPUT" ]; then
+    apply_full_color_stack=false
+    bashio::log.info "haos-kiosk: reconnect on same output, keeping previous color/HDR state"
+  fi
+
   if [ "$FORCE_OUTPUT_ON" = true ]; then
     xrandr --output "$ACTIVE_OUTPUT" --auto --primary || true
   fi
 
-  reset_output_to_safe_baseline
+  if [ "$apply_full_color_stack" = true ]; then
+    reset_output_to_safe_baseline
+  fi
 
   if [ "$LAST_CAPS_OUTPUT" != "$ACTIVE_OUTPUT" ]; then
     log_xrandr_output_capabilities "$ACTIVE_OUTPUT"
@@ -761,8 +770,12 @@ configure_display_output() {
     fi
   fi
 
-  apply_hdr_mode
-  apply_color_space "$COLOR_SPACE"
+  if [ "$apply_full_color_stack" = true ]; then
+    apply_hdr_mode
+    apply_color_space "$COLOR_SPACE"
+    LAST_FULL_COLOR_APPLY_OUTPUT="$ACTIVE_OUTPUT"
+  fi
+
   recover_bad_link_status
   return 0
 }
