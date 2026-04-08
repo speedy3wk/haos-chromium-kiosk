@@ -35,6 +35,15 @@ configuration:
   refresh_rate:
     name: Refresh Rate
     description: Force display refresh rate (0 = auto)
+  hdr_mode:
+    name: HDR Mode
+    description: auto | off | on (best-effort)
+  color_space:
+    name: Color Space
+    description: auto | rgb | yuv444 | yuv422 | yuv420
+  force_output_on:
+    name: Force Output On
+    description: Try to keep output active (software EDID ghost style)
   login_delay:
     name: Login Delay
     description: Seconds before auto-login attempt

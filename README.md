@@ -23,6 +23,9 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `resolution_width`: Force display width (0 = auto)
 - `resolution_height`: Force display height (0 = auto)
 - `refresh_rate`: Force display refresh rate (0 = auto)
+- `hdr_mode`: auto | off | on (best-effort via xrandr properties)
+- `color_space`: auto | rgb | yuv444 | yuv422 | yuv420
+- `force_output_on`: Try forcing DRM connector on (software EDID ghost style)
 - `login_delay`: Seconds before auto-login attempt
 - `browser_refresh`: Seconds between refreshes (0 = disabled, default 0)
 - `browser_mod_id`: Value for browser_mod-browser-id
