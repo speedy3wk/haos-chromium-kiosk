@@ -37,19 +37,19 @@ configuration:
     description: Force display refresh rate (0 = auto)
   video_profile_preset:
     name: Video Profile Preset
-    description: custom | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc
+    description: Main switch. non-custom overrides advanced color options.
   hdr_mode:
-    name: HDR Mode
-    description: auto | off | on (best-effort, mainly for custom)
+    name: Advanced: HDR Mode
+    description: Used with preset=custom. auto | off | on
   color_space:
-    name: Color Space
-    description: auto | rgb | yuv444 | yuv422 | yuv420 (mainly for custom)
+    name: Advanced: Color Space
+    description: Used with preset=custom. auto | rgb | yuv444 | yuv422 | yuv420
   color_profile:
-    name: Color Profile
-    description: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater (mainly for custom)
+    name: Advanced: Color Profile
+    description: Used with preset=custom. If not auto, this has priority over color_space.
   rgb_range:
-    name: RGB Range
-    description: auto | full | limited (used with color_space=rgb, mainly for custom)
+    name: Advanced: RGB Range
+    description: Used with preset=custom and RGB path only. auto | full | limited
   force_output_on:
     name: Force Output On
     description: Try to keep output active (software EDID ghost style)

@@ -521,6 +521,22 @@ apply_color_space() {
     esac
   }
 
+  try_set_colorspace_value() {
+    local value
+    if [ -n "$property" ]; then
+      try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "$@"
+      return $?
+    fi
+
+    for property_candidate in "Colorspace" "ColorSpace" "color space"; do
+      if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property_candidate" "$@"; then
+        property="$property_candidate"
+        return 0
+      fi
+    done
+    return 1
+  }
+
   resolve_color_profile_value() {
     case "$color_profile_key" in
       auto|"") color_profile_value="" ;;
@@ -556,14 +572,14 @@ apply_color_space() {
   }
 
   apply_explicit_color_profile() {
-    if [ -z "$property" ] || [ -z "$color_profile_value" ]; then
+    if [ -z "$color_profile_value" ]; then
       return 1
     fi
-    if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "$color_profile_value"; then
+    if try_set_colorspace_value "$color_profile_value"; then
       bashio::log.info "haos-kiosk: set explicit color_profile='$COLOR_PROFILE' ($color_profile_value)"
       return 0
     fi
-    bashio::log.warning "haos-kiosk: requested color_profile='$COLOR_PROFILE' is not supported by $property on $ACTIVE_OUTPUT"
+    bashio::log.warning "haos-kiosk: requested color_profile='$COLOR_PROFILE' is not supported by available color space properties on $ACTIVE_OUTPUT"
     return 1
   }
 
@@ -618,24 +634,24 @@ apply_color_space() {
   if [ -n "$property" ]; then
     case "$target" in
       rgb)
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "RGB" "RGB Full" "opRGB" "Default"; then
+        if try_set_colorspace_value "RGB" "RGB Full" "opRGB" "Default"; then
           applied=true
         fi
         apply_rgb_range_for_rgb_mode
         ;;
       yuv444)
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
           applied=true
         fi
         ;;
       yuv422)
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
           applied=true
           bashio::log.info "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
         fi
         ;;
       yuv420)
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
           applied=true
           bashio::log.info "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
         fi

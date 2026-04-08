@@ -46,6 +46,12 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - Home Assistant 2026.2+ moved some dashboard and app panels; if the kiosk shows a redirect or blank panel, review `ha_dashboard` to match the new dashboard/app panel URL.
 - Created with AI tools, reviewed and tested by me.
 
+## Video Option Priority (Important)
+- `video_profile_preset != custom` overrides `hdr_mode`, `color_space`, `color_profile`, and `rgb_range`.
+- `color_profile != auto` has priority over `color_space` mapping.
+- `rgb_range` only applies to RGB output paths; it is ignored for YCC-based profiles.
+- To avoid HDMI re-sync flashes between sources, align both sources to the same output style (resolution/refresh/HDR/color family).
+
 ## Installation (Custom App Repository)
 1. In Home Assistant, go to Settings -> Apps -> Install App (App-Store).
 2. Open the three-dot menu -> Repositories.
