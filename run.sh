@@ -65,7 +65,7 @@ apply_video_profile_preset() {
     sdr_rgb_limited)
       HDR_MODE="off"
       COLOR_SPACE="rgb"
-      COLOR_PROFILE="default"
+      COLOR_PROFILE="auto"
       RGB_RANGE="limited"
       ;;
     sdr_bt709_ycc)
@@ -494,35 +494,23 @@ apply_color_space() {
   apply_rgb_range_for_rgb_mode() {
     case "$rgb_range_value" in
       auto)
-        if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
-          if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic"; then
-            bashio::log.warning "haos-kiosk: Broadcast RGB exists but automatic mode could not be set"
-          fi
+        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic"; then
+          bashio::log.warning "haos-kiosk: Broadcast RGB automatic mode could not be set"
         fi
         ;;
       full)
-        if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
-          if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full"; then
-            bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB could not be set"
-          fi
-        else
-          bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB property is unavailable"
+        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full"; then
+          bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB could not be set"
         fi
         ;;
       limited)
-        if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
-          if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited"; then
-            bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB could not be set"
-          fi
-        else
-          bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB property is unavailable"
+        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited"; then
+          bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB could not be set"
         fi
         ;;
       *)
         bashio::log.warning "haos-kiosk: unknown rgb_range='$RGB_RANGE', using auto"
-        if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
-          try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
-        fi
+        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
         ;;
     esac
   }
@@ -637,42 +625,37 @@ apply_color_space() {
     return 0
   fi
 
-  if [ -n "$property" ]; then
-    case "$target" in
-      rgb)
-        if try_set_colorspace_value "RGB" "RGB Full" "opRGB" "Default"; then
-          applied=true
-        fi
-        apply_rgb_range_for_rgb_mode
-        ;;
-      yuv444)
-        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-          applied=true
-        fi
-        ;;
-      yuv422)
-        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-          applied=true
-          bashio::log.info "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
-        fi
-        ;;
-      yuv420)
-        if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-          applied=true
-          bashio::log.info "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
-        fi
-        ;;
-    esac
+  case "$target" in
+    rgb)
+      if try_set_colorspace_value "RGB" "RGB Full" "opRGB" "Default"; then
+        applied=true
+      fi
+      apply_rgb_range_for_rgb_mode
+      ;;
+    yuv444)
+      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        applied=true
+      fi
+      ;;
+    yuv422)
+      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        applied=true
+        bashio::log.info "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
+      fi
+      ;;
+    yuv420)
+      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
+        applied=true
+        bashio::log.info "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
+      fi
+      ;;
+  esac
 
-    if [ "$applied" = false ]; then
-      bashio::log.warning "haos-kiosk: requested color_space='$COLOR_SPACE' is not supported by $property on $ACTIVE_OUTPUT"
-    fi
-    return 0
-  elif [ "$target" = "rgb" ]; then
-    apply_rgb_range_for_rgb_mode
-  else
+  if [ "$applied" = false ]; then
     bashio::log.warning "haos-kiosk: no compatible xrandr color space property found for '$COLOR_SPACE'"
   fi
+
+  return 0
 }
 
 read_xrandr_property_value() {
@@ -718,6 +701,17 @@ recover_bad_link_status() {
   xrandr --output "$ACTIVE_OUTPUT" --auto || true
 }
 
+reset_output_to_safe_baseline() {
+  # Reset to conservative values first so stale prior modes (e.g. BT2020) do not survive restarts.
+  if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
+  fi
+  try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "Default" >/dev/null 2>&1 || \
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "Default" >/dev/null 2>&1 || \
+    try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "Default" >/dev/null 2>&1 || true
+  try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" >/dev/null 2>&1 || true
+}
+
 pick_active_output() {
   local output
   output="$(xrandr | awk '/ connected/{print $1; exit}')"
@@ -741,6 +735,8 @@ configure_display_output() {
   if [ "$FORCE_OUTPUT_ON" = true ]; then
     xrandr --output "$ACTIVE_OUTPUT" --auto --primary || true
   fi
+
+  reset_output_to_safe_baseline
 
   if [ "$LAST_CAPS_OUTPUT" != "$ACTIVE_OUTPUT" ]; then
     log_xrandr_output_capabilities "$ACTIVE_OUTPUT"
