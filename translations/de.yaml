@@ -41,6 +41,12 @@ configuration:
   color_space:
     name: Farbraum
     description: auto | rgb | yuv444 | yuv422 | yuv420
+  color_profile:
+    name: Farbprofil
+    description: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater
+  rgb_range:
+    name: RGB Bereich
+    description: auto | full | limited (nur bei color_space=rgb)
   force_output_on:
     name: Ausgang erzwingen
     description: Versucht den Ausgang aktiv zu halten (Software-EDID-Ghost)

@@ -25,6 +25,8 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `refresh_rate`: Force display refresh rate (0 = auto)
 - `hdr_mode`: auto | off | on (best-effort via xrandr properties)
 - `color_space`: auto | rgb | yuv444 | yuv422 | yuv420
+- `color_profile`: auto | default | bt709 | bt2020_ycc | bt2020_rgb | bt2020_cycc | smpte170m | xvycc_709 | xvycc_601 | sycc_601 | opycc_601 | oprgb | dci_p3_d65 | dci_p3_theater
+- `rgb_range`: auto | full | limited (applies when `color_space=rgb`)
 - `force_output_on`: Try forcing DRM connector on (software EDID ghost style)
 - `login_delay`: Seconds before auto-login attempt
 - `browser_refresh`: Seconds between refreshes (0 = disabled, default 0)
