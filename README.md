@@ -8,9 +8,10 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - Optional auto-login (username/password)
 - Screen timeout and display rotation
 - HDMI/USB audio sink selection
-- Display output management with reconnect monitoring
+- Display reconnect monitoring — reinitializes xrandr/color/HDR settings automatically when the display is disconnected and reconnected (e.g. TV power cycle, AVR switch)
 - HDR and color space configuration via xrandr (AMD/Nvidia; Intel: Broadcast RGB)
-- Chromium watchdog (auto-restarts if Chromium exits)
+- Chromium process watchdog — detects crashes and restarts Chromium automatically
+- Automatic startup on HAOS boot (`boot: auto`) — no manual intervention needed after a system restart
 - Extension-based UI tweaks (sidebar mode, header, theme, dark mode)
 - Clean startup log with optional verbose debug output
 
