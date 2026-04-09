@@ -43,10 +43,7 @@ configuration:
     description: "preset=custom only. Requires HDR-capable display and GPU driver support (not available on Intel i915). auto | off | on"
   color_space:
     name: Advanced Color Space
-    description: "preset=custom only. Driver colorspace hint. rgb and yuv modes require GPU/driver support (AMD amdgpu, dedicated GPUs). Intel i915: only rgb/auto reliably works. auto | rgb | yuv444 | yuv422 | yuv420"
-  color_profile:
-    name: Advanced Color Profile
-    description: "preset=custom only. Overrides color_space if set. Colorspace profiles (BT.709, BT.2020, DCI-P3 etc.) require driver support — AMD amdgpu and discrete GPUs only. Intel i915: use auto."
+    description: "preset=custom only. auto = let driver decide. rgb = force RGB output + Broadcast RGB range. yuv = best available YCC profile. Explicit profiles (bt709, bt2020_ycc, bt2020_rgb, oprgb, dci_p3_d65 ...): set exact xrandr colorspace. Colorspace properties require AMD/Nvidia. Intel i915: only auto/rgb reliably works."
   rgb_range:
     name: Advanced RGB Range
     description: "preset=custom only, RGB path only. Controls Broadcast RGB (full vs. limited 16-235). Works on most GPUs incl. Intel. auto | full | limited"

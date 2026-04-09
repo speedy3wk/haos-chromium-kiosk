@@ -44,7 +44,6 @@ load_config_var video_profile_preset "passthrough"
 load_config_var software_rendering false
 load_config_var hdr_mode "auto"
 load_config_var color_space "auto"
-load_config_var color_profile "auto"
 load_config_var rgb_range "auto"
 load_config_var force_output_on false
 load_config_var login_delay 2
@@ -71,25 +70,21 @@ apply_video_profile_preset() {
     passthrough)
       HDR_MODE="auto"
       COLOR_SPACE="auto"
-      COLOR_PROFILE="auto"
       RGB_RANGE="auto"
       ;;
     sdr_rgb_limited)
       HDR_MODE="off"
       COLOR_SPACE="rgb"
-      COLOR_PROFILE="auto"
       RGB_RANGE="limited"
       ;;
     sdr_bt709_ycc)
       HDR_MODE="off"
-      COLOR_SPACE="yuv422"
-      COLOR_PROFILE="bt709"
+      COLOR_SPACE="bt709"
       RGB_RANGE="auto"
       ;;
     hdr_bt2020_ycc)
       HDR_MODE="on"
-      COLOR_SPACE="yuv422"
-      COLOR_PROFILE="bt2020_ycc"
+      COLOR_SPACE="bt2020_ycc"
       RGB_RANGE="auto"
       ;;
     *)
@@ -143,7 +138,7 @@ if [ -n "$HA_DASHBOARD" ]; then
   esac
 fi
 bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING"
-bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  cp=$COLOR_PROFILE  rgb=$RGB_RANGE"
+bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  rgb=$RGB_RANGE"
 bashio::log.info "haos-kiosk: browser: dark=$DARK_MODE  sidebar=$HA_SIDEBAR  header=$HIDE_HEADER  timeout=${SCREEN_TIMEOUT}s  audio=$AUDIO_SINK"
 log_debug "haos-kiosk: ha_url=$HA_URL  dashboard=$HA_DASHBOARD  refresh=${BROWSER_REFRESH}s  mod_id=$BROWSER_MOD_ID  force_out=$FORCE_OUTPUT_ON  cursor=$HIDE_CURSOR"
 
@@ -496,30 +491,28 @@ apply_hdr_mode() {
 }
 
 apply_color_space() {
-  local target="$1"
-  local property=""
+  local target="${COLOR_SPACE,,}"
+  local prop=""
   local applied=false
-  local color_profile_key="${COLOR_PROFILE,,}"
-  local color_profile_value=""
   local rgb_range_value="${RGB_RANGE,,}"
-  local explicit_profile_is_ycc=false
 
-  apply_rgb_range_for_rgb_mode() {
+  if [ "$target" = "auto" ]; then
+    return 0
+  fi
+
+  apply_rgb_range() {
     case "$rgb_range_value" in
       auto)
-        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic"; then
+        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || \
           bashio::log.warning "haos-kiosk: Broadcast RGB automatic mode could not be set"
-        fi
         ;;
       full)
-        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full"; then
+        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full" || \
           bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB could not be set"
-        fi
         ;;
       limited)
-        if ! try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited"; then
+        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited" || \
           bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB could not be set"
-        fi
         ;;
       *)
         bashio::log.warning "haos-kiosk: unknown rgb_range='$RGB_RANGE', using auto"
@@ -528,143 +521,47 @@ apply_color_space() {
     esac
   }
 
-  try_set_colorspace_value() {
-    local value
-    if [ -n "$property" ]; then
-      try_set_xrandr_property "$ACTIVE_OUTPUT" "$property" "$@"
-      return $?
+  for candidate in "Colorspace" "ColorSpace" "color space"; do
+    if xrandr_output_has_property "$ACTIVE_OUTPUT" "$candidate"; then
+      prop="$candidate"
+      break
     fi
+  done
 
-    for property_candidate in "Colorspace" "ColorSpace" "color space"; do
-      if try_set_xrandr_property "$ACTIVE_OUTPUT" "$property_candidate" "$@"; then
-        property="$property_candidate"
-        return 0
-      fi
-    done
-    return 1
+  try_set_cs() {
+    [ -n "$prop" ] && try_set_xrandr_property "$ACTIVE_OUTPUT" "$prop" "$@"
   }
 
-  resolve_color_profile_value() {
-    case "$color_profile_key" in
-      auto|"") color_profile_value="" ;;
-      default) color_profile_value="Default" ;;
-      bt709) color_profile_value="BT709_YCC" ;;
-      bt2020_ycc) color_profile_value="BT2020_YCC" ;;
-      bt2020_rgb) color_profile_value="BT2020_RGB" ;;
-      bt2020_cycc) color_profile_value="BT2020_CYCC" ;;
-      smpte170m) color_profile_value="SMPTE_170M_YCC" ;;
-      xvycc_709) color_profile_value="XVYCC_709" ;;
-      xvycc_601) color_profile_value="XVYCC_601" ;;
-      sycc_601) color_profile_value="SYCC_601" ;;
-      opycc_601) color_profile_value="opYCC_601" ;;
-      oprgb) color_profile_value="opRGB" ;;
-      dci_p3_d65) color_profile_value="DCI-P3_RGB_D65" ;;
-      dci_p3_theater) color_profile_value="DCI-P3_RGB_Theater" ;;
-      *)
-        bashio::log.warning "haos-kiosk: unknown color_profile='$COLOR_PROFILE', using auto"
-        color_profile_value=""
-        ;;
-    esac
-  }
-
-  detect_explicit_profile_type() {
-    case "$color_profile_key" in
-      bt709|bt2020_ycc|bt2020_cycc|smpte170m|xvycc_709|xvycc_601|sycc_601|opycc_601)
-        explicit_profile_is_ycc=true
-        ;;
-      *)
-        explicit_profile_is_ycc=false
-        ;;
-    esac
-  }
-
-  apply_explicit_color_profile() {
-    if [ -z "$color_profile_value" ]; then
-      return 1
-    fi
-    if try_set_colorspace_value "$color_profile_value"; then
-      bashio::log.info "haos-kiosk: set explicit color_profile='$COLOR_PROFILE' ($color_profile_value)"
-      return 0
-    fi
-    bashio::log.warning "haos-kiosk: requested color_profile='$COLOR_PROFILE' is not supported by available color space properties on $ACTIVE_OUTPUT"
-    return 1
-  }
-
-  case "$COLOR_SPACE" in
-    auto)
-      target="auto"
-      ;;
+  case "$target" in
     rgb)
-      target="rgb"
+      try_set_cs "RGB" "RGB Full" "opRGB" "Default" && applied=true || true
+      apply_rgb_range
       ;;
-    yuv444|yuv422|yuv420)
-      target="$COLOR_SPACE"
+    yuv)
+      try_set_cs "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601" && applied=true || true
       ;;
+    # Explicit YCC profiles
+    bt709)       try_set_cs "BT709_YCC"      && applied=true || true ;;
+    bt2020_ycc)  try_set_cs "BT2020_YCC"     && applied=true || true ;;
+    bt2020_cycc) try_set_cs "BT2020_CYCC"    && applied=true || true ;;
+    smpte170m)   try_set_cs "SMPTE_170M_YCC" && applied=true || true ;;
+    xvycc_709)   try_set_cs "XVYCC_709"      && applied=true || true ;;
+    xvycc_601)   try_set_cs "XVYCC_601"      && applied=true || true ;;
+    sycc_601)    try_set_cs "SYCC_601"        && applied=true || true ;;
+    opycc_601)   try_set_cs "opYCC_601"       && applied=true || true ;;
+    # Explicit RGB profiles — also apply Broadcast RGB range
+    bt2020_rgb)     try_set_cs "BT2020_RGB"         && applied=true || true; apply_rgb_range ;;
+    oprgb)          try_set_cs "opRGB"               && applied=true || true; apply_rgb_range ;;
+    dci_p3_d65)     try_set_cs "DCI-P3_RGB_D65"     && applied=true || true; apply_rgb_range ;;
+    dci_p3_theater) try_set_cs "DCI-P3_RGB_Theater" && applied=true || true; apply_rgb_range ;;
+    default)        try_set_cs "Default"             && applied=true || true; apply_rgb_range ;;
     *)
       bashio::log.warning "haos-kiosk: unknown color_space='$COLOR_SPACE', skipping"
       return 0
       ;;
   esac
 
-  for candidate in "Colorspace" "ColorSpace" "color space"; do
-    if xrandr_output_has_property "$ACTIVE_OUTPUT" "$candidate"; then
-      property="$candidate"
-      break
-    fi
-  done
-
-  resolve_color_profile_value
-  detect_explicit_profile_type
-
-  if apply_explicit_color_profile; then
-    if [ "$target" = "rgb" ]; then
-      if [ "$explicit_profile_is_ycc" = true ]; then
-        if [ "$rgb_range_value" != "auto" ]; then
-          log_debug "haos-kiosk: rgb_range is ignored because color_profile='$COLOR_PROFILE' is YCC-based"
-        fi
-      else
-        apply_rgb_range_for_rgb_mode
-      fi
-    elif [ "$rgb_range_value" != "auto" ]; then
-      log_debug "haos-kiosk: rgb_range is ignored unless color_space=rgb"
-    fi
-    return 0
-  fi
-
-  if [ "$target" = "auto" ]; then
-    if [ "$rgb_range_value" != "auto" ]; then
-      log_debug "haos-kiosk: rgb_range is ignored when color_space=auto"
-    fi
-    return 0
-  fi
-
-  case "$target" in
-    rgb)
-      if try_set_colorspace_value "RGB" "RGB Full" "opRGB" "Default"; then
-        applied=true
-      fi
-      apply_rgb_range_for_rgb_mode
-      ;;
-    yuv444)
-      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-        applied=true
-      fi
-      ;;
-    yuv422)
-      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-        applied=true
-        log_debug "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
-      fi
-      ;;
-    yuv420)
-      if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
-        applied=true
-        log_debug "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
-      fi
-      ;;
-  esac
-
-  if [ "$applied" = false ]; then
+  if [ "$applied" = false ] && [ "$target" != "rgb" ]; then
     bashio::log.warning "haos-kiosk: no compatible xrandr color space property found for '$COLOR_SPACE'"
   fi
 
@@ -784,7 +681,7 @@ configure_display_output() {
 
   if [ "$apply_full_color_stack" = true ]; then
     apply_hdr_mode
-    apply_color_space "$COLOR_SPACE"
+    apply_color_space
     LAST_FULL_COLOR_APPLY_OUTPUT="$ACTIVE_OUTPUT"
   fi
 

@@ -47,10 +47,9 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 ### Video & Color
 | Option | Default | Description |
 |---|---|---|
-| `video_profile_preset` | `passthrough` | Applies a preset for `hdr_mode`, `color_space`, `color_profile`, `rgb_range` — see presets below |
+| `video_profile_preset` | `passthrough` | Applies a preset for `hdr_mode`, `color_space`, `rgb_range` — see presets below |
 | `hdr_mode` | `auto` | HDR via xrandr `max bpc` / Colorspace: `auto` \| `off` \| `on` |
-| `color_space` | `auto` | Output color format: `auto` \| `rgb` \| `yuv444` \| `yuv422` \| `yuv420` |
-| `color_profile` | `auto` | Explicit xrandr colorspace profile (see full list below) |
+| `color_space` | `auto` | Color output mode — `auto`, `rgb`, `yuv`, or an explicit profile name (see below) |
 | `rgb_range` | `auto` | Broadcast RGB range: `auto` \| `full` \| `limited` (only applies to RGB output) |
 
 ### Debug
@@ -60,23 +59,32 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 
 ## Video Profile Presets
 
-`video_profile_preset` is the recommended entry point for color/HDR configuration. Setting it to anything other than `custom` overrides `hdr_mode`, `color_space`, `color_profile`, and `rgb_range`.
+`video_profile_preset` is the recommended entry point for color/HDR configuration. Setting it to anything other than `custom` overrides `hdr_mode`, `color_space`, and `rgb_range`.
 
-| Preset | HDR | Color Space | Color Profile | RGB Range | Use Case |
-|---|---|---|---|---|---|
-| `passthrough` | auto | auto | auto | auto | Default — let the display and driver negotiate |
-| `custom` | _(from individual options)_ | — | — | — | Full manual control |
-| `sdr_rgb_limited` | off | rgb | auto | limited | SDR with limited RGB (16–235), common for TV displays |
-| `sdr_bt709_ycc` | off | yuv422 | bt709 | auto | SDR YCC BT.709, typical broadcast/TV signal style |
-| `hdr_bt2020_ycc` | on | yuv422 | bt2020_ycc | auto | HDR BT.2020 YCC (AMD/Nvidia; requires compatible display and driver) |
+| Preset | HDR | Color Space | RGB Range | Use Case |
+|---|---|---|---|---|
+| `passthrough` | auto | auto | auto | Default — let the display and driver negotiate |
+| `custom` | _(from individual options)_ | — | — | Full manual control |
+| `sdr_rgb_limited` | off | rgb | limited | SDR with limited RGB (16–235), common for TV displays |
+| `sdr_bt709_ycc` | off | bt709 | auto | SDR YCC BT.709, typical broadcast/TV signal style |
+| `hdr_bt2020_ycc` | on | bt2020_ycc | auto | HDR BT.2020 YCC (AMD/Nvidia; requires compatible display and driver) |
 
-### Color Profile Values (for `color_profile`)
-`auto` · `default` · `bt709` · `bt2020_ycc` · `bt2020_rgb` · `bt2020_cycc` · `smpte170m` · `xvycc_709` · `xvycc_601` · `sycc_601` · `opycc_601` · `oprgb` · `dci_p3_d65` · `dci_p3_theater`
+### `color_space` Values
+
+| Value | Behavior |
+|---|---|
+| `auto` | Let the driver and display negotiate (no explicit property set) |
+| `rgb` | Force RGB output; auto-picks best available RGB colorspace profile |
+| `yuv` | Force YCC output; auto-picks best available YCC profile (BT.709, BT.2020 etc.) |
+| `bt709` · `bt2020_ycc` · `bt2020_rgb` · `bt2020_cycc` · `smpte170m` | Exact named YCC or RGB profile |
+| `xvycc_709` · `xvycc_601` · `sycc_601` · `opycc_601` · `oprgb` · `default` | Further explicit profiles |
+| `dci_p3_d65` · `dci_p3_theater` | DCI-P3 RGB profiles (theater/D65 white point) |
+
+Explicit profile values (anything other than `auto`, `rgb`, `yuv`) set an exact xrandr colorspace — useful when you know exactly what your display and GPU driver support.
 
 ### Hardware Notes
-- **Intel (i915/modesetting):** Only `Broadcast RGB` (`rgb_range`) is reliably available. `Colorspace`/`ColorSpace` properties are not exposed by i915 — HDR and explicit color profiles will have no effect.
-- **AMD (amdgpu) / Nvidia:** Full xrandr color space and HDR property support; all presets and `color_profile` values work as intended.
-- `color_profile != auto` takes priority over `color_space` mapping.
+- **Intel (i915/modesetting):** Only `Broadcast RGB` (`rgb_range`) is reliably available. xrandr `Colorspace`/`ColorSpace` properties are not exposed by i915 — HDR and explicit color profiles will have no effect. Use `auto` or `rgb`.
+- **AMD (amdgpu) / Nvidia:** Full xrandr color space and HDR property support; all `color_space` values and presets work as intended.
 - `rgb_range` is ignored for YCC-based profiles.
 
 ## Logging
