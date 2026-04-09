@@ -19,10 +19,7 @@ configuration:
     description: Home Assistant Theme-Name (optional)
   ha_sidebar:
     name: HA Sidebar
-    description: full | narrow | none | auto
-  hide_sidebar:
-    name: Sidebar ausblenden
-    description: Home Assistant Sidebar ausblenden
+    description: "Sidebar-Sichtbarkeit: full | narrow | none (ausgeblendet) | auto"
   hide_header:
     name: Header ausblenden
     description: Home Assistant Header ausblenden
@@ -37,22 +34,22 @@ configuration:
     description: Display-Refresh erzwingen (0 = auto, Dezimalwerte wie 59.94 moeglich)
   video_profile_preset:
     name: Video Profil Preset
-    description: Hauptschalter. custom | passthrough (Standard) | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020 (ohne Erzwingen)
+    description: "Hauptschalter: passthrough (Standard, keine Aenderungen) | sdr_rgb_limited (TV / Limited Range) | sdr_bt709_ycc | hdr_bt2020_ycc | custom (erweiterte Optionen nutzen)"
   software_rendering:
     name: Software Rendering
-    description: Deaktiviert den Chromium-GPU-Pfad (standardmaessig aktiv; Fallback bei Black-Screen)
+    description: Deaktiviert Chromium GPU-Beschleunigung (SwiftShader CPU-Fallback). Nur aktivieren bei Black-Screen-Problemen mit Hardware-Rendering.
   hdr_mode:
     name: Advanced HDR Modus
-    description: Nur bei preset=custom. auto | off | on
+    description: "Nur bei preset=custom. Benoetigt HDR-faehiges Display und Treiber-Unterstuetzung (nicht verfuegbar auf Intel i915). auto | off | on"
   color_space:
     name: Advanced Farbraum
-    description: Nur bei preset=custom. auto | rgb | yuv444 | yuv422 | yuv420
+    description: "Nur bei preset=custom. Farbraum-Hinweis an den Treiber. rgb/yuv-Modi benoetigen GPU-Unterstuetzung (AMD amdgpu, diskrete GPUs). Intel i915: nur rgb/auto zuverlaessig. auto | rgb | yuv444 | yuv422 | yuv420"
   color_profile:
     name: Advanced Farbprofil
-    description: Nur bei preset=custom. Wenn nicht auto, hat es Vorrang vor color_space.
+    description: "Nur bei preset=custom. Ueberschreibt color_space wenn gesetzt. Farbprofile (BT.709, BT.2020, DCI-P3 etc.) erfordern Treiber-Unterstuetzung — AMD amdgpu und diskrete GPUs. Intel i915: auto verwenden."
   rgb_range:
     name: Advanced RGB Bereich
-    description: Nur bei preset=custom und RGB-Pfad. auto | full | limited
+    description: "Nur bei preset=custom und RGB-Pfad. Steuert Broadcast RGB (full vs. limited 16-235). Funktioniert auf den meisten GPUs inkl. Intel. auto | full | limited"
   force_output_on:
     name: Ausgang erzwingen
     description: Versucht den Ausgang aktiv zu halten (Software-EDID-Ghost)
@@ -83,3 +80,6 @@ configuration:
   hide_cursor:
     name: Cursor ausblenden
     description: Mauszeiger ausblenden
+  debug_logging:
+    name: Debug-Logging
+    description: Ausfuehrliche Debug-Ausgaben im Add-on-Log aktivieren

@@ -36,12 +36,11 @@ load_config_var ha_password ""
 load_config_var dark_mode true
 load_config_var ha_theme ""
 load_config_var ha_sidebar "full"
-load_config_var hide_sidebar false
 load_config_var hide_header false
 load_config_var resolution_width 0
 load_config_var resolution_height 0
 load_config_var refresh_rate 0
-load_config_var video_profile_preset "custom"
+load_config_var video_profile_preset "passthrough"
 load_config_var software_rendering false
 load_config_var hdr_mode "auto"
 load_config_var color_space "auto"
@@ -57,6 +56,12 @@ load_config_var screen_timeout 0
 load_config_var rotate_display "normal"
 load_config_var audio_sink "auto"
 load_config_var hide_cursor true
+load_config_var debug_logging false
+
+log_debug() {
+  [ "${DEBUG_LOGGING:-false}" = "true" ] || return 0
+  bashio::log.info "[DEBUG] $*"
+}
 
 apply_video_profile_preset() {
   case "$VIDEO_PROFILE_PRESET" in
@@ -85,13 +90,6 @@ apply_video_profile_preset() {
       HDR_MODE="on"
       COLOR_SPACE="yuv422"
       COLOR_PROFILE="bt2020_ycc"
-      RGB_RANGE="auto"
-      ;;
-    match_shield_bt2020)
-      # Stability-first: avoid forcing HDR/colorspace to minimize AVR/splitter re-negotiation.
-      HDR_MODE="auto"
-      COLOR_SPACE="auto"
-      COLOR_PROFILE="auto"
       RGB_RANGE="auto"
       ;;
     *)
@@ -132,13 +130,11 @@ export HA_URL_BASE
 export HA_URL_HOST
 
 if [ "$CLEAR_CHROMIUM_ON_START" = true ]; then
-  bashio::log.info "haos-kiosk: clear_chromium_on_start enabled"
+  bashio::log.info "haos-kiosk: clear_chromium_on_start enabled, wiping browser profile"
   rm -rf /data/chromium
 fi
 
-bashio::log.info "haos-kiosk: ha_url=$HA_URL"
-bashio::log.info "haos-kiosk: ha_dashboard=$HA_DASHBOARD"
-bashio::log.info "haos-kiosk: ha_dashboard_full=$HA_URL_BASE"
+bashio::log.info "haos-kiosk: url=$HA_URL_BASE"
 if [ -n "$HA_DASHBOARD" ]; then
   case "$HA_DASHBOARD" in
     lovelace*|dashboard*|hassio*|addon*|developer-tools*|config*)
@@ -146,15 +142,10 @@ if [ -n "$HA_DASHBOARD" ]; then
       ;;
   esac
 fi
-bashio::log.info "haos-kiosk: dark_mode=$DARK_MODE ha_sidebar=$HA_SIDEBAR hide_sidebar=$HIDE_SIDEBAR hide_header=$HIDE_HEADER"
-bashio::log.info "haos-kiosk: resolution=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT} refresh_rate=$REFRESH_RATE"
-bashio::log.info "haos-kiosk: video_profile_preset=$VIDEO_PROFILE_PRESET"
-bashio::log.info "haos-kiosk: software_rendering=$SOFTWARE_RENDERING"
-bashio::log.info "haos-kiosk: hdr_mode=$HDR_MODE color_space=$COLOR_SPACE color_profile=$COLOR_PROFILE rgb_range=$RGB_RANGE force_output_on=$FORCE_OUTPUT_ON"
-bashio::log.info "haos-kiosk: browser_refresh=$BROWSER_REFRESH browser_mod_id=$BROWSER_MOD_ID"
-bashio::log.info "haos-kiosk: rotate_display=$ROTATE_DISPLAY zoom_level=$ZOOM_LEVEL screen_timeout=$SCREEN_TIMEOUT"
-bashio::log.info "haos-kiosk: audio_sink=$AUDIO_SINK"
-bashio::log.info "haos-kiosk: hide_cursor=$HIDE_CURSOR"
+bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING"
+bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  cp=$COLOR_PROFILE  rgb=$RGB_RANGE"
+bashio::log.info "haos-kiosk: browser: dark=$DARK_MODE  sidebar=$HA_SIDEBAR  header=$HIDE_HEADER  timeout=${SCREEN_TIMEOUT}s  audio=$AUDIO_SINK"
+log_debug "haos-kiosk: ha_url=$HA_URL  dashboard=$HA_DASHBOARD  refresh=${BROWSER_REFRESH}s  mod_id=$BROWSER_MOD_ID  force_out=$FORCE_OUTPUT_ON  cursor=$HIDE_CURSOR"
 
 
 python3 - <<'PY'
@@ -165,9 +156,14 @@ from urllib.parse import urlparse
 
 ha_url = os.environ.get("HA_URL", "")
 ha_url_base = os.environ.get("HA_URL_BASE", "")
+debug = os.environ.get("DEBUG_LOGGING", "false").lower() == "true"
 
 def _log(msg: str) -> None:
-  print(f"haos-kiosk: {msg}")
+  if debug:
+    print(f"haos-kiosk: {msg}")
+
+def _warn(msg: str) -> None:
+  print(f"haos-kiosk: WARNING connectivity: {msg}")
 
 def _check_url(label: str, url: str) -> None:
   if not url:
@@ -178,7 +174,7 @@ def _check_url(label: str, url: str) -> None:
     with urllib.request.urlopen(req, timeout=3) as resp:
       _log(f"connectivity {label}: {url} -> {resp.status}")
   except Exception as exc:
-    _log(f"connectivity {label}: {url} -> error {exc}")
+    _warn(f"{label}: {url} -> {exc}")
 
 def _check_tcp(hostname: str | None, port: int | None) -> None:
   if not hostname or not port:
@@ -189,16 +185,17 @@ def _check_tcp(hostname: str | None, port: int | None) -> None:
     sock.close()
     _log(f"connectivity tcp: {hostname}:{port} -> ok")
   except Exception as exc:
-    _log(f"connectivity tcp: {hostname}:{port} -> error {exc}")
+    _warn(f"tcp: {hostname}:{port} -> {exc}")
 
 
 parsed = urlparse(ha_url)
 host = parsed.hostname
 if host:
   try:
-    _log(f"dns {host}: {socket.gethostbyname(host)}")
+    resolved = socket.gethostbyname(host)
+    _log(f"dns {host}: {resolved}")
   except Exception as exc:
-    _log(f"dns {host}: error {exc}")
+    _warn(f"dns {host}: {exc}")
 
 _check_tcp(parsed.hostname, parsed.port or 8123)
 
@@ -206,7 +203,7 @@ _check_url("ha_url", ha_url)
 _check_url("ha_url_base", ha_url_base)
 PY
 
-bashio::log.info "Starting DBus..."
+log_debug "Starting DBus..."
 mkdir -p /run/dbus
 dbus-daemon --system --fork
 DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address || true)
@@ -215,9 +212,11 @@ if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
   echo "export DBUS_SESSION_BUS_ADDRESS='$DBUS_SESSION_BUS_ADDRESS'" >> "$HOME/.profile" || true
 fi
 
-bashio::log.info "DRM video cards:"
-find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sed 's/^/  /'
-bashio::log.info "DRM video card driver and connection status:"
+if [ "${DEBUG_LOGGING:-false}" = "true" ]; then
+  bashio::log.info "DRM video cards:"
+  find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sed 's/^/  /'
+  bashio::log.info "DRM video card driver and connection status:"
+fi
 selected_card=""
 selected_connector=""
 
@@ -233,11 +232,11 @@ scan_drm_connectors() {
     if [ -z "$selected_card" ] && [ "$status" = "connected" ]; then
       selected_card="$card"
       selected_connector="$card_port"
-      printf "  *"
+      [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "  *"
     else
-      printf "   "
+      [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "   "
     fi
-    printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
+    [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
   done
 }
 
@@ -249,7 +248,7 @@ force_drm_connectors_on() {
     [ -e "$force_path" ] || continue
     connector=$(basename "$(dirname "$force_path")")
     if [ -w "$force_path" ] && echo on > "$force_path" 2>/dev/null; then
-      bashio::log.info "haos-kiosk: forced DRM connector on: $connector"
+      log_debug "haos-kiosk: forced DRM connector on: $connector"
       forced_any=true
     else
       bashio::log.warning "haos-kiosk: could not force DRM connector: $connector"
@@ -261,13 +260,15 @@ force_drm_connectors_on() {
 }
 
 scan_drm_connectors
+[ -n "$selected_card" ] && bashio::log.info "haos-kiosk: GPU $selected_card  connector=$selected_connector"
 
 if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
   bashio::log.warning "haos-kiosk: no connected display detected, trying force_output_on"
   force_drm_connectors_on
   udevadm settle --timeout=5 || true
-  bashio::log.info "haos-kiosk: rechecking DRM connector state after force"
+  log_debug "haos-kiosk: rechecking DRM connector state after force"
   scan_drm_connectors
+  [ -n "$selected_card" ] && bashio::log.info "haos-kiosk: GPU $selected_card  connector=$selected_connector"
 fi
 
 if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
@@ -292,7 +293,7 @@ if [ -z "$selected_card" ]; then
 fi
 
 if [ -e "/dev/tty0" ]; then
-  bashio::log.info "Attempting to remount /dev as 'rw' so we can (temporarily) delete /dev/tty0..."
+  log_debug "haos-kiosk: remounting /dev rw to delete /dev/tty0..."
   if ! mount -o remount,rw /dev ; then
     bashio::log.error "Failed to remount /dev as read-write..."
     exit 1
@@ -302,24 +303,26 @@ if [ -e "/dev/tty0" ]; then
     exit 1
   fi
   TTY0_DELETED=1
-  bashio::log.info "Deleted /dev/tty0 successfully..."
+  log_debug "haos-kiosk: deleted /dev/tty0..."
 fi
 
-bashio::log.info "Starting udev..."
+log_debug "Starting udev..."
 if ! udevd --daemon || ! udevadm trigger; then
   bashio::log.warning "WARNING: Failed to start udevd or trigger udev, input devices may not work"
 fi
 udevadm settle --timeout=10 || true
 
-bashio::log.info "Starting Xorg..."
+log_debug "Starting Xorg..."
 rm -rf /tmp/.X*-lock
 cp -a /etc/X11/xorg.conf.default /etc/X11/xorg.conf
 sed -i "/Option[[:space:]]\+\"DRI\"[[:space:]]\+\"3\"/a\    Option          \"kmsdev\" \"/dev/dri/$selected_card\"" /etc/X11/xorg.conf
-echo "."
-printf '%*s xorg.conf %*s\n' 35 '' 34 '' | tr ' ' '#'
-cat /etc/X11/xorg.conf
-printf '%*s\n' 80 '' | tr ' ' '#'
-echo "."
+if [ "${DEBUG_LOGGING:-false}" = "true" ]; then
+  echo "."
+  printf '%*s xorg.conf %*s\n' 35 '' 34 '' | tr ' ' '#'
+  cat /etc/X11/xorg.conf
+  printf '%*s\n' 80 '' | tr ' ' '#'
+  echo "."
+fi
 
 NOCURSOR=""
 if [ "$HIDE_CURSOR" = true ]; then
@@ -337,7 +340,7 @@ done
 
 if [ -n "$TTY0_DELETED" ]; then
   if mknod -m 620 /dev/tty0 c 4 0; then
-    bashio::log.info "Restored /dev/tty0 successfully..."
+    log_debug "haos-kiosk: restored /dev/tty0..."
     TTY0_DELETED=""
   else
     bashio::log.error "Failed to restore /dev/tty0..."
@@ -351,7 +354,7 @@ fi
 
 sleep 2
 
-bashio::log.info "Starting Openbox..."
+log_debug "Starting Openbox..."
 openbox &
 
 if [ "$HIDE_CURSOR" = true ]; then
@@ -374,11 +377,11 @@ log_xrandr_output_capabilities() {
   local trimmed
   local next_supported=false
 
-  bashio::log.info "haos-kiosk: xrandr capability summary for output: $output"
+  log_debug "haos-kiosk: xrandr capability summary for output: $output"
   while IFS= read -r line; do
     if [[ "$line" =~ ^${output}[[:space:]]+(connected|disconnected) ]]; then
       in_output=true
-      bashio::log.info "haos-kiosk: xrandr[$output] ${line//$'\t'/ }"
+      log_debug "haos-kiosk: xrandr[$output] ${line//$'\t'/ }"
       continue
     fi
 
@@ -394,7 +397,7 @@ log_xrandr_output_capabilities() {
 
     if [ "$next_supported" = true ]; then
       if [[ "$trimmed" == supported:* ]]; then
-        bashio::log.info "haos-kiosk: xrandr[$output] $trimmed"
+        log_debug "haos-kiosk: xrandr[$output] $trimmed"
       fi
       next_supported=false
       continue
@@ -402,7 +405,7 @@ log_xrandr_output_capabilities() {
 
     case "$trimmed" in
       "max bpc:"*|"Colorspace:"*|"ColorSpace:"*|"Broadcast RGB:"*|"content type:"*|"link-status:"*)
-        bashio::log.info "haos-kiosk: xrandr[$output] $trimmed"
+        log_debug "haos-kiosk: xrandr[$output] $trimmed"
         next_supported=true
         ;;
     esac
@@ -439,7 +442,7 @@ try_set_xrandr_property() {
   local value
   for value in "$@"; do
     if xrandr --output "$output" --set "$property" "$value" >/dev/null 2>&1; then
-      bashio::log.info "haos-kiosk: set xrandr property $property=$value on $output"
+      log_debug "haos-kiosk: set xrandr property $property=$value on $output"
       return 0
     fi
   done
@@ -453,7 +456,7 @@ apply_hdr_mode() {
       return 0
       ;;
     on)
-      bashio::log.info "haos-kiosk: applying HDR mode: on"
+      log_debug "haos-kiosk: applying HDR mode: on"
       if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
         if try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "10" "12"; then
           applied=true
@@ -477,7 +480,7 @@ apply_hdr_mode() {
       fi
       ;;
     off)
-      bashio::log.info "haos-kiosk: applying HDR mode: off"
+      log_debug "haos-kiosk: applying HDR mode: off"
       if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
         try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
       fi
@@ -617,20 +620,20 @@ apply_color_space() {
     if [ "$target" = "rgb" ]; then
       if [ "$explicit_profile_is_ycc" = true ]; then
         if [ "$rgb_range_value" != "auto" ]; then
-          bashio::log.info "haos-kiosk: rgb_range is ignored because color_profile='$COLOR_PROFILE' is YCC-based"
+          log_debug "haos-kiosk: rgb_range is ignored because color_profile='$COLOR_PROFILE' is YCC-based"
         fi
       else
         apply_rgb_range_for_rgb_mode
       fi
     elif [ "$rgb_range_value" != "auto" ]; then
-      bashio::log.info "haos-kiosk: rgb_range is ignored unless color_space=rgb"
+      log_debug "haos-kiosk: rgb_range is ignored unless color_space=rgb"
     fi
     return 0
   fi
 
   if [ "$target" = "auto" ]; then
     if [ "$rgb_range_value" != "auto" ]; then
-      bashio::log.info "haos-kiosk: rgb_range is ignored when color_space=auto"
+      log_debug "haos-kiosk: rgb_range is ignored when color_space=auto"
     fi
     return 0
   fi
@@ -650,13 +653,13 @@ apply_color_space() {
     yuv422)
       if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
         applied=true
-        bashio::log.info "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
+        log_debug "haos-kiosk: color_space=yuv422 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
       fi
       ;;
     yuv420)
       if try_set_colorspace_value "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601"; then
         applied=true
-        bashio::log.info "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
+        log_debug "haos-kiosk: color_space=yuv420 mapped to driver colorspace profile (subsampling is sink/GPU managed)"
       fi
       ;;
   esac
@@ -745,7 +748,7 @@ configure_display_output() {
 
   if [ "$reason" = "reconnect" ] && [ "$ACTIVE_OUTPUT" = "$LAST_FULL_COLOR_APPLY_OUTPUT" ]; then
     apply_full_color_stack=false
-    bashio::log.info "haos-kiosk: reconnect on same output, keeping previous color/HDR state"
+    log_debug "haos-kiosk: reconnect on same output, keeping previous color/HDR state"
   fi
 
   if [ "$FORCE_OUTPUT_ON" = true ]; then
@@ -761,7 +764,7 @@ configure_display_output() {
     LAST_CAPS_OUTPUT="$ACTIVE_OUTPUT"
   fi
 
-  bashio::log.info "Setting display rotation: $ROTATE_DISPLAY"
+  log_debug "haos-kiosk: setting display rotation $ROTATE_DISPLAY"
   case "$ROTATE_DISPLAY" in
     left) xrandr --output "$ACTIVE_OUTPUT" --rotate left || true ;;
     right) xrandr --output "$ACTIVE_OUTPUT" --rotate right || true ;;
@@ -770,9 +773,9 @@ configure_display_output() {
   esac
 
   if [ "$RESOLUTION_WIDTH" -gt 0 ] && [ "$RESOLUTION_HEIGHT" -gt 0 ]; then
-    bashio::log.info "Setting resolution: ${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}"
+    log_debug "haos-kiosk: setting resolution ${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}"
     if awk -v r="$REFRESH_RATE" 'BEGIN { exit !(r+0 > 0) }'; then
-      bashio::log.info "Setting refresh rate: ${REFRESH_RATE}"
+      log_debug "haos-kiosk: setting refresh rate ${REFRESH_RATE}Hz"
       xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" --rate "$REFRESH_RATE" || true
     else
       xrandr --output "$ACTIVE_OUTPUT" --mode "${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}" || true
@@ -794,7 +797,7 @@ if ! configure_display_output "startup"; then
 fi
 
 if [ "$SCREEN_TIMEOUT" -gt 0 ]; then
-  bashio::log.info "Setting screen timeout: $SCREEN_TIMEOUT"
+  log_debug "haos-kiosk: screen timeout ${SCREEN_TIMEOUT}s"
   xset s "$SCREEN_TIMEOUT" "$SCREEN_TIMEOUT"
   xset dpms "$SCREEN_TIMEOUT" "$SCREEN_TIMEOUT" "$SCREEN_TIMEOUT"
 else
@@ -803,7 +806,7 @@ else
 fi
 
 if [ "$AUDIO_SINK" != "none" ]; then
-  bashio::log.info "Setting audio sink: $AUDIO_SINK"
+  log_debug "haos-kiosk: audio sink $AUDIO_SINK"
   if [ "$AUDIO_SINK" = "hdmi" ]; then
     pactl set-default-sink "$(pactl list short sinks | awk '/hdmi/{print $2; exit}')" || true
   elif [ "$AUDIO_SINK" = "usb" ]; then
@@ -896,7 +899,6 @@ config = {
   "darkMode": _as_bool(os.getenv("DARK_MODE", "true")),
   "sidebarMode": os.getenv("HA_SIDEBAR", "full").strip().lower(),
   "browserModId": os.getenv("BROWSER_MOD_ID", "haos_kiosk").strip(),
-  "hideSidebar": _as_bool(os.getenv("HIDE_SIDEBAR", "false")),
   "hideHeader": _as_bool(os.getenv("HIDE_HEADER", "false")),
   "theme": os.getenv("HA_THEME", ""),
   "loginDelayMs": _as_int_ms(os.getenv("LOGIN_DELAY", "2")),
@@ -927,13 +929,13 @@ with open("/data/haos-extension/config.js", "w", encoding="utf-8") as handle:
 PY
 }
 
-bashio::log.info "Launching Chromium..."
+bashio::log.info "haos-kiosk: launching Chromium"
 configure_chromium_prefs
 init_extension
 launch_chromium
 
 
-bashio::log.info "Starting Chromium watchdog"
+log_debug "haos-kiosk: starting Chromium watchdog"
 (
   sleep 5
   while true; do
@@ -945,7 +947,7 @@ bashio::log.info "Starting Chromium watchdog"
   done
 ) &
 
-bashio::log.info "Starting output reconnect monitor"
+log_debug "haos-kiosk: starting output reconnect monitor"
 (
   last_seen_output="$ACTIVE_OUTPUT"
   while true; do

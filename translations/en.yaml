@@ -19,10 +19,7 @@ configuration:
     description: Home Assistant theme name (optional)
   ha_sidebar:
     name: HA Sidebar
-    description: full | narrow | none | auto
-  hide_sidebar:
-    name: Hide Sidebar
-    description: Hide Home Assistant sidebar
+    description: "Controls sidebar visibility: full | narrow | none (hidden) | auto"
   hide_header:
     name: Hide Header
     description: Hide Home Assistant header
@@ -37,22 +34,22 @@ configuration:
     description: Force display refresh rate (0 = auto, decimals like 59.94 supported)
   video_profile_preset:
     name: Video Profile Preset
-    description: Main switch. custom | passthrough (default) | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020 (non-forcing)
+    description: "Main switch: passthrough (default, no changes) | sdr_rgb_limited (TV/limited-range) | sdr_bt709_ycc | hdr_bt2020_ycc | custom (use advanced options below)"
   software_rendering:
     name: Software Rendering
-    description: Disable Chromium GPU path (default on; fallback for black-screen issues)
+    description: Disable Chromium GPU acceleration (SwiftShader CPU fallback). Only enable if you see a black screen with hardware rendering.
   hdr_mode:
     name: Advanced HDR Mode
-    description: Used with preset=custom. auto | off | on
+    description: "preset=custom only. Requires HDR-capable display and GPU driver support (not available on Intel i915). auto | off | on"
   color_space:
     name: Advanced Color Space
-    description: Used with preset=custom. auto | rgb | yuv444 | yuv422 | yuv420
+    description: "preset=custom only. Driver colorspace hint. rgb and yuv modes require GPU/driver support (AMD amdgpu, dedicated GPUs). Intel i915: only rgb/auto reliably works. auto | rgb | yuv444 | yuv422 | yuv420"
   color_profile:
     name: Advanced Color Profile
-    description: Used with preset=custom. If not auto, this has priority over color_space.
+    description: "preset=custom only. Overrides color_space if set. Colorspace profiles (BT.709, BT.2020, DCI-P3 etc.) require driver support — AMD amdgpu and discrete GPUs only. Intel i915: use auto."
   rgb_range:
     name: Advanced RGB Range
-    description: Used with preset=custom and RGB path only. auto | full | limited
+    description: "preset=custom only, RGB path only. Controls Broadcast RGB (full vs. limited 16-235). Works on most GPUs incl. Intel. auto | full | limited"
   force_output_on:
     name: Force Output On
     description: Try to keep output active (software EDID ghost style)
@@ -83,3 +80,6 @@ configuration:
   hide_cursor:
     name: Hide Cursor
     description: Hide the mouse cursor
+  debug_logging:
+    name: Debug Logging
+    description: Enable verbose debug output in the add-on log

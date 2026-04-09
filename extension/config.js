@@ -4,7 +4,6 @@ window.__HAOS_KIOSK_CONFIG = {
   "haUrlHosts": [],
   "username": "",
   "password": "",
-  "hideSidebar": false,
   "hideHeader": false,
   "theme": "",
   "loginDelayMs": 0

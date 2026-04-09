@@ -2,7 +2,6 @@
   const cfg = window.__HAOS_KIOSK_CONFIG || {};
   const haUrlHost = cfg.haUrlHost || "";
 
-  const hideSidebar = Boolean(cfg.hideSidebar);
   const hideHeader = Boolean(cfg.hideHeader);
   const theme = cfg.theme || "";
   const darkMode = cfg.darkMode === undefined ? null : Boolean(cfg.darkMode);
@@ -34,9 +33,6 @@
   }
 
   function resolveSidebarValue() {
-    if (hideSidebar) {
-      return "always_hidden";
-    }
     if (sidebarMode === "none") {
       return "always_hidden";
     }

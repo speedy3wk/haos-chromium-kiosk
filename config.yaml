@@ -66,13 +66,12 @@ options:
   dark_mode: true
   ha_theme: ""
   ha_sidebar: "full"
-  hide_sidebar: false
   hide_header: false
   resolution_width: 0
   resolution_height: 0
   refresh_rate: 0
   video_profile_preset: "passthrough"
-  software_rendering: true
+  software_rendering: false
   hdr_mode: "auto"
   color_space: "auto"
   color_profile: "auto"
@@ -87,6 +86,7 @@ options:
   rotate_display: "normal"
   audio_sink: "auto"
   hide_cursor: true
+  debug_logging: false
 schema:
   ha_url: str
   ha_dashboard: str
@@ -95,12 +95,11 @@ schema:
   dark_mode: bool
   ha_theme: str
   ha_sidebar: list(full|narrow|none|auto)
-  hide_sidebar: bool
   hide_header: bool
   resolution_width: int
   resolution_height: int
   refresh_rate: float
-  video_profile_preset: list(custom|passthrough|sdr_rgb_limited|sdr_bt709_ycc|hdr_bt2020_ycc|match_shield_bt2020)
+  video_profile_preset: list(custom|passthrough|sdr_rgb_limited|sdr_bt709_ycc|hdr_bt2020_ycc)
   software_rendering: bool
   hdr_mode: list(auto|off|on)
   color_space: list(auto|rgb|yuv444|yuv422|yuv420)
@@ -116,5 +115,6 @@ schema:
   rotate_display: list(normal|left|right|inverted)
   audio_sink: list(auto|hdmi|usb|none)
   hide_cursor: bool
+  debug_logging: bool
 map:
   - addon_config:rw
