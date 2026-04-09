@@ -37,10 +37,10 @@ configuration:
     description: Force display refresh rate (0 = auto, decimals like 59.94 supported)
   video_profile_preset:
     name: Video Profile Preset
-    description: Main switch. custom | passthrough | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
+    description: Main switch. custom | passthrough (default) | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020 (non-forcing)
   software_rendering:
     name: Software Rendering
-    description: Disable Chromium GPU path (fallback for black-screen issues)
+    description: Disable Chromium GPU path (default on; fallback for black-screen issues)
   hdr_mode:
     name: Advanced HDR Mode
     description: Used with preset=custom. auto | off | on

@@ -55,7 +55,8 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - `video_profile_preset=passthrough` keeps color/HDR controls in auto and avoids explicit profile forcing.
 
 ### Practical Tip
-- For NVIDIA Shield configured as 4K 59.94Hz YUV420 Rec.2020, start with `video_profile_preset=match_shield_bt2020`.
+- For NVIDIA Shield configured as 4K 59.94/60Hz HDR-ready output, start with `video_profile_preset=match_shield_bt2020`.
+- `match_shield_bt2020` is intentionally non-forcing (EDID-driven) to reduce re-handshake flashes and black-screen risk.
 
 ## Installation (Custom App Repository)
 1. In Home Assistant, go to Settings -> Apps -> Install App (App-Store).

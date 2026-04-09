@@ -37,10 +37,10 @@ configuration:
     description: Display-Refresh erzwingen (0 = auto, Dezimalwerte wie 59.94 moeglich)
   video_profile_preset:
     name: Video Profil Preset
-    description: Hauptschalter. custom | passthrough | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020
+    description: Hauptschalter. custom | passthrough (Standard) | sdr_rgb_limited | sdr_bt709_ycc | hdr_bt2020_ycc | match_shield_bt2020 (ohne Erzwingen)
   software_rendering:
     name: Software Rendering
-    description: Deaktiviert den Chromium-GPU-Pfad (Fallback bei Black-Screen)
+    description: Deaktiviert den Chromium-GPU-Pfad (standardmaessig aktiv; Fallback bei Black-Screen)
   hdr_mode:
     name: Advanced HDR Modus
     description: Nur bei preset=custom. auto | off | on

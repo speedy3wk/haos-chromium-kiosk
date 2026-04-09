@@ -88,9 +88,10 @@ apply_video_profile_preset() {
       RGB_RANGE="auto"
       ;;
     match_shield_bt2020)
-      HDR_MODE="on"
-      COLOR_SPACE="yuv420"
-      COLOR_PROFILE="bt2020_ycc"
+      # Stability-first: avoid forcing HDR/colorspace to minimize AVR/splitter re-negotiation.
+      HDR_MODE="auto"
+      COLOR_SPACE="auto"
+      COLOR_PROFILE="auto"
       RGB_RANGE="auto"
       ;;
     *)
