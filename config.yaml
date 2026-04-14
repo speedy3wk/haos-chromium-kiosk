@@ -1,13 +1,11 @@
 name: HAOS Chromium Kiosk
 slug: haos-chromium-kiosk
 description: Chromium-based kiosk display for HAOS HDMI output.
-version: "0.1.67"
+version: "0.1.68"
 url: "https://github.com/speedy3wk/haos-chromium-kiosk"
 arch:
   - amd64
   - aarch64
-  - armv7
-  - armhf
 startup: application
 boot: auto
 init: false
