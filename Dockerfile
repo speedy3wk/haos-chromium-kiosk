@@ -12,6 +12,9 @@ RUN apk add --no-cache \
     mesa-dri-gallium \
     mesa-egl \
     mesa-gles \
+    libva \
+    libva-utils \
+    mesa-va-gallium \
     font-dejavu \
     util-linux \
     openbox \
@@ -21,6 +24,11 @@ RUN apk add --no-cache \
     xset \
     unclutter-xfixes \
     python3
+
+# Intel VA-API driver (iHD, Broadwell and newer) only exists for x86_64.
+RUN if [ "$(apk --print-arch)" = "x86_64" ]; then \
+      apk add --no-cache intel-media-driver; \
+    fi
 
 COPY run.sh /
 RUN chmod a+x /run.sh

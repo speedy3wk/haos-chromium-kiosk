@@ -2,6 +2,9 @@
 
 ## 0.1.69
 
+### Added
+- Hardware video decoding via VA-API on Intel (iHD, x86_64) and AMD GPUs. The image now ships the VA-API drivers, and the startup log shows the detected driver and decode profiles. New option `hw_video_decode` (default `true`) to turn it off.
+
 ### Fixed
 - Extension now only runs on the configured Home Assistant host. Previously credentials could be auto-filled on any page with `/auth/` in its path.
 - Connection and load-failure watchdogs actually work now. Websocket state comes from a main-world probe, and the `ha-init-page` is detected inside the shadow DOM. Reloads only happen once Home Assistant answers again.

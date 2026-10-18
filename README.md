@@ -8,6 +8,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - Optional auto-login (username/password) — the bundled extension only runs on the configured Home Assistant host
 - Screen timeout and display rotation
 - HDMI/USB audio sink selection
+- Hardware video decoding via VA-API on Intel/AMD GPUs (logged at startup)
 - Display reconnect monitoring — reinitializes xrandr/color/HDR settings automatically when the display is disconnected and reconnected (e.g. TV power cycle, AVR switch)
 - HDR and color space configuration via xrandr (AMD/Nvidia; Intel: Broadcast RGB)
 - Chromium process watchdog — detects crashes and restarts Chromium automatically
@@ -36,6 +37,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 | `browser_mod_id` | `haos_kiosk` | ID sent as `browser_mod` browser-id |
 | `clear_chromium_on_start` | `false` | Wipe Chromium profile on every startup |
 | `software_rendering` | `false` | Disable GPU acceleration and render on the CPU (fallback for GPU issues) |
+| `hw_video_decode` | `true` | Hardware video decoding via VA-API (Intel/AMD). Disable if video playback shows artifacts or crashes |
 
 ### Display Hardware
 | Option | Default | Description |
@@ -90,6 +92,7 @@ Explicit profile values (anything other than `auto`, `rgb`, `yuv`) set an exact 
 - **Intel (i915/modesetting):** Only `Broadcast RGB` (`rgb_range`) is reliably available. xrandr `Colorspace`/`ColorSpace` properties are not exposed by i915 — HDR and explicit color profiles will have no effect. Use `auto` or `rgb`.
 - **AMD (amdgpu) / Nvidia:** Full xrandr color space and HDR property support; all `color_space` values and presets work as intended.
 - `rgb_range` is ignored for YCC-based profiles.
+- **Video decoding:** Chromium uses VA-API automatically when a driver is available. The image ships `intel-media-driver` (Intel Broadwell and newer, x86_64 only) and `mesa-va-gallium` (AMD). The startup log shows the detected driver and decode profiles. Older Intel GPUs (pre-Broadwell) and Raspberry Pi have no VA-API decoding here and decode on the CPU. On a Raspberry Pi, prefer 1080p H.264 media.
 - **HDR under X11:** `hdr_mode: on` only switches the link to 10/12 bpc and BT.2020 colorimetry. X11 cannot send HDR metadata and Chromium renders SDR content, so colors may look washed out. Use it only if your display handles this well.
 
 ## Logging

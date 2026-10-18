@@ -38,6 +38,9 @@ configuration:
   software_rendering:
     name: Software Rendering
     description: Deaktiviert Chromium GPU-Beschleunigung (CPU-Rendering). Nur aktivieren bei Black-Screen-Problemen mit Hardware-Rendering.
+  hw_video_decode:
+    name: Hardware-Videodekodierung
+    description: "Dekodiert Videos (je nach GPU H.264, HEVC, VP9, AV1) per VA-API auf Intel/AMD-GPUs. Deaktivieren bei Bildfehlern oder Abstürzen während der Wiedergabe; wird bei Software Rendering ignoriert."
   hdr_mode:
     name: Advanced HDR Modus
     description: "Nur bei preset=custom. Benoetigt HDR-faehiges Display und Treiber-Unterstuetzung (nicht verfuegbar auf Intel i915). Unter X11 wird nur 10-bit + BT.2020 signalisiert, ohne HDR-Metadaten; SDR-Inhalte koennen blass wirken. auto | off | on"

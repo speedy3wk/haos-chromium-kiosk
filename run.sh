@@ -42,6 +42,7 @@ load_config_var resolution_height 0
 load_config_var refresh_rate 0
 load_config_var video_profile_preset "passthrough"
 load_config_var software_rendering false
+load_config_var hw_video_decode true
 load_config_var hdr_mode "auto"
 load_config_var color_space "auto"
 load_config_var rgb_range "auto"
@@ -131,7 +132,7 @@ if [ "$CLEAR_CHROMIUM_ON_START" = true ]; then
 fi
 
 bashio::log.info "haos-kiosk: url=$HA_URL_BASE"
-bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING"
+bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING  hw_video_decode=$HW_VIDEO_DECODE"
 bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  rgb=$RGB_RANGE"
 bashio::log.info "haos-kiosk: browser: dark=$DARK_MODE  sidebar=$HA_SIDEBAR  header=$HIDE_HEADER  timeout=${SCREEN_TIMEOUT}s  audio=$AUDIO_SINK"
 log_debug "haos-kiosk: ha_url=$HA_URL  dashboard=$HA_DASHBOARD  refresh=${BROWSER_REFRESH}s  mod_id=$BROWSER_MOD_ID  force_out=$FORCE_OUTPUT_ON  cursor=$HIDE_CURSOR"
@@ -678,6 +679,29 @@ if [ "$AUDIO_SINK" != "none" ]; then
 fi
 
 
+# Chromium (Alpine builds with use_vaapi) enables VA-API decoding by default; this only reports
+# whether a usable driver exists so CPU fallback is visible in the log.
+log_vaapi_status() {
+  if [ "$SOFTWARE_RENDERING" = true ] || [ "$HW_VIDEO_DECODE" != true ]; then
+    bashio::log.info "haos-kiosk: hardware video decode disabled by configuration"
+    return
+  fi
+  local node vainfo_out driver codecs
+  for node in /dev/dri/renderD*; do
+    [ -c "$node" ] || continue
+    vainfo_out="$(vainfo --display drm --device "$node" 2>&1 || true)"
+    driver="$(printf '%s\n' "$vainfo_out" | sed -n 's/^.*Driver version: *//p' | head -n1)"
+    if [ -n "$driver" ]; then
+      codecs="$(printf '%s\n' "$vainfo_out" | awk '/VAEntrypointVLD/ { sub(/^[ \t]*VAProfile/, "", $1); print $1 }' | sort -u | tr '\n' ' ')"
+      bashio::log.info "haos-kiosk: VA-API $node driver=\"$driver\""
+      bashio::log.info "haos-kiosk: VA-API decode profiles: ${codecs:-none}"
+      return
+    fi
+    log_debug "haos-kiosk: vainfo $node: $(printf '%s' "$vainfo_out" | tail -n1)"
+  done
+  bashio::log.warning "haos-kiosk: no usable VA-API driver found, video is decoded on the CPU"
+}
+
 launch_chromium() {
   mkdir -p /data/chromium
   # A previous Chromium instance (crash, container restart) can leave stale profile locks behind,
@@ -687,6 +711,8 @@ launch_chromium() {
   local extra_flags=()
   if [ "$SOFTWARE_RENDERING" = true ]; then
     extra_flags+=(--disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode)
+  elif [ "$HW_VIDEO_DECODE" != true ]; then
+    extra_flags+=(--disable-accelerated-video-decode)
   fi
   if [ "$DARK_MODE" = true ]; then
     extra_flags+=(--force-dark-mode)
@@ -836,6 +862,7 @@ chromium_running() {
 
 configure_chromium_prefs
 init_extension
+log_vaapi_status
 wait_for_home_assistant 180
 bashio::log.info "haos-kiosk: launching Chromium"
 launch_chromium
