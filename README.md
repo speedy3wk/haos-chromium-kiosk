@@ -104,6 +104,11 @@ In normal operation the add-on log shows only:
 
 Enable `debug_logging: true` for verbose output: DRM connector details, xorg.conf, xrandr property queries, connectivity checks, and all internal state changes.
 
+### Startup troubleshooting
+- **0.1.69 stops after the connectivity checks:** DRM connector scanning could exit the add-on when `debug_logging` was `false`, before Xorg started. Fixed in 0.1.70.
+- **`Connection refused` for Home Assistant:** These connectivity checks only warn; they do not stop startup. Verify that Home Assistant has finished starting and that `ha_url` uses its actual address, port and HTTP/HTTPS scheme.
+- **UTM/virtual machines:** CPU hardware virtualization does not by itself provide GPU acceleration or VA-API video decoding to the guest. The add-on needs a usable guest DRM device and display output; use the DRM/Xorg startup logs to diagnose graphics separately from connectivity.
+
 ## Notes
 - Auto-login and UI tweaks are injected via a bundled Chromium extension, loaded with `--load-extension`. Google Chrome ignores this flag since version 137, but the unbranded Alpine Chromium build still supports it.
 - Since Home Assistant 2026.2 the selected theme is stored in the user profile on the server. If the kiosk user has saved a theme there, it overrides `ha_theme`/`dark_mode`. Use a dedicated kiosk user without a saved theme preference.

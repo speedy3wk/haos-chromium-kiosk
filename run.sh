@@ -221,12 +221,17 @@ scan_drm_connectors() {
     if [ -z "$selected_card" ] && [ "$status" = "connected" ]; then
       selected_card="$card"
       selected_connector="$card_port"
-      [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "  *"
-    else
-      [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "   "
     fi
-    [ "${DEBUG_LOGGING:-false}" = "true" ] && printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
+    if [ "${DEBUG_LOGGING:-false}" = "true" ]; then
+      if [ "$selected_connector" = "$card_port" ]; then
+        printf "  *"
+      else
+        printf "   "
+      fi
+      printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
+    fi
   done
+  return 0
 }
 
 force_drm_connectors_on() {

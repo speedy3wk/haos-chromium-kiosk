@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.70
+
+### Fixed
+- DRM connector scanning no longer aborts startup under `set -e` when debug logging is disabled. Display selection is independent of the debug output, including when no connector is connected.
+
 ## 0.1.69
 
 ### Added
