@@ -1,7 +1,7 @@
 name: HAOS Chromium Kiosk
 slug: haos-chromium-kiosk
 description: Chromium-based kiosk display for HAOS HDMI output.
-version: "0.1.68"
+version: "0.1.69"
 url: "https://github.com/speedy3wk/haos-chromium-kiosk"
 arch:
   - amd64
@@ -10,9 +10,6 @@ startup: application
 boot: auto
 init: false
 host_network: true
-ingress: true
-homeassistant_api: true
-auth_api: true
 audio: true
 usb: true
 environment:
@@ -85,32 +82,30 @@ options:
   hide_cursor: true
   debug_logging: false
 schema:
-  ha_url: str
+  ha_url: url
   ha_dashboard: str
   ha_username: str
-  ha_password: str
+  ha_password: password
   dark_mode: bool
   ha_theme: str
   ha_sidebar: list(full|narrow|none|auto)
   hide_header: bool
-  resolution_width: int
-  resolution_height: int
-  refresh_rate: float
+  resolution_width: int(0,)
+  resolution_height: int(0,)
+  refresh_rate: float(0,)
   video_profile_preset: list(custom|passthrough|sdr_rgb_limited|sdr_bt709_ycc|hdr_bt2020_ycc)
   software_rendering: bool
   hdr_mode: list(auto|off|on)
   color_space: list(auto|rgb|yuv|default|bt709|bt2020_ycc|bt2020_rgb|bt2020_cycc|smpte170m|xvycc_709|xvycc_601|sycc_601|opycc_601|oprgb|dci_p3_d65|dci_p3_theater)
   rgb_range: list(auto|full|limited)
   force_output_on: bool
-  login_delay: int
-  browser_refresh: int
+  login_delay: int(0,60)
+  browser_refresh: int(0,)
   browser_mod_id: str
   clear_chromium_on_start: bool
-  zoom_level: int
-  screen_timeout: int
+  zoom_level: int(25,400)
+  screen_timeout: int(0,)
   rotate_display: list(normal|left|right|inverted)
   audio_sink: list(auto|hdmi|usb|none)
   hide_cursor: bool
   debug_logging: bool
-map:
-  - addon_config:rw

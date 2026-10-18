@@ -1,7 +1,12 @@
 (function () {
   const cfg = window.__HAOS_KIOSK_CONFIG || {};
-  const haUrlHost = cfg.haUrlHost || "";
 
+  const allowedOrigins = Array.isArray(cfg.haUrlHosts) ? cfg.haUrlHosts : [];
+  if (allowedOrigins.length && !allowedOrigins.includes(window.location.origin)) {
+    return;
+  }
+
+  const haUrlHost = cfg.haUrlHost || "";
   const hideHeader = Boolean(cfg.hideHeader);
   const theme = cfg.theme || "";
   const darkMode = cfg.darkMode === undefined ? null : Boolean(cfg.darkMode);
@@ -11,6 +16,8 @@
   const password = cfg.password || "";
   const loginDelayMs = Number.isFinite(cfg.loginDelayMs) ? cfg.loginDelayMs : 0;
   const refreshIntervalSec = Number.isFinite(cfg.refreshIntervalSec) ? cfg.refreshIntervalSec : 0;
+
+  const INIT_FAILURE_KEY = "haos-kiosk-init-failures";
 
   function safeLocalStorageSet(key, value) {
     try {
@@ -38,9 +45,6 @@
     }
     if (sidebarMode === "narrow" || sidebarMode === "auto") {
       return "auto";
-    }
-    if (sidebarMode === "full") {
-      return "";
     }
     return "";
   }
@@ -93,57 +97,6 @@
     }
   }
 
-  function buildHeaderStyle() {
-    return [
-      ":host, :root { --kiosk-header-height: 0px !important; }",
-      "#view {",
-      "  min-height: 100vh !important;",
-      "  padding-top: calc(var(--kiosk-header-height) + env(safe-area-inset-top)) !important;",
-      "}",
-      ".header, .view-header, hui-view-header { display: none !important; }"
-    ].join("\n");
-  }
-
-  function injectHeaderStyle() {
-    if (!hideHeader) {
-      return;
-    }
-    const styleId = "haos-kiosk-header-style";
-    const applyToRoot = (root) => {
-      if (!root || (root.querySelector && root.querySelector(`#${styleId}`))) {
-        return;
-      }
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.textContent = buildHeaderStyle();
-      root.appendChild(style);
-    };
-    const applyToShadow = (el) => {
-      if (!el || !el.shadowRoot) {
-        return;
-      }
-      applyToRoot(el.shadowRoot);
-    };
-
-    const tryApply = () => {
-      applyToRoot(document.head || document.documentElement);
-      const ha = document.querySelector("home-assistant") || queryDeep("home-assistant");
-      applyToShadow(ha);
-      applyToShadow(queryDeep("ha-panel-lovelace"));
-      applyToShadow(queryDeep("hui-root"));
-      return Boolean(queryDeep("hui-root"));
-    };
-
-    if (!tryApply()) {
-      const observer = new MutationObserver(() => {
-        if (tryApply()) {
-          observer.disconnect();
-        }
-      });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-    }
-  }
-
   function queryDeep(selector, root) {
     const queue = [root || document];
     while (queue.length) {
@@ -157,17 +110,13 @@
           return found;
         }
       }
-      const childNodes = [];
       if (node.shadowRoot) {
-        childNodes.push(node.shadowRoot);
+        queue.push(node.shadowRoot);
       }
       if (node.children) {
         for (const child of node.children) {
-          childNodes.push(child);
+          queue.push(child);
         }
-      }
-      for (const child of childNodes) {
-        queue.push(child);
       }
     }
     return null;
@@ -181,6 +130,91 @@
       }
     }
     return null;
+  }
+
+  // Fast path through the known HA element tree; avoids a full deep scan on every poll.
+  function getHaShadow() {
+    const ha = document.querySelector("home-assistant");
+    return ha && ha.shadowRoot ? ha.shadowRoot : null;
+  }
+
+  function findHuiRoot(allowDeepScan) {
+    const haShadow = getHaShadow();
+    const main = haShadow && haShadow.querySelector("home-assistant-main");
+    const mainShadow = main && main.shadowRoot;
+    const panel = mainShadow && mainShadow.querySelector("ha-panel-lovelace");
+    const huiRoot = panel && panel.shadowRoot && panel.shadowRoot.querySelector("hui-root");
+    if (huiRoot) {
+      return huiRoot;
+    }
+    return allowDeepScan ? queryDeep("hui-root") : null;
+  }
+
+  function findInitPage() {
+    const haShadow = getHaShadow();
+    return (haShadow && haShadow.querySelector("ha-init-page")) || document.querySelector("ha-init-page");
+  }
+
+  function isAppLoaded() {
+    const haShadow = getHaShadow();
+    return Boolean(haShadow && haShadow.querySelector("home-assistant-main"));
+  }
+
+  function deepText(node) {
+    if (!node) {
+      return "";
+    }
+    let text = "";
+    const queue = [node];
+    while (queue.length) {
+      const current = queue.shift();
+      if (current.nodeType === Node.TEXT_NODE) {
+        text += current.textContent + " ";
+        continue;
+      }
+      if (current.shadowRoot) {
+        queue.push(current.shadowRoot);
+      }
+      for (const child of current.childNodes || []) {
+        queue.push(child);
+      }
+    }
+    return text;
+  }
+
+  function buildHeaderStyle() {
+    return [
+      ":host { --header-height: 0px !important; }",
+      ".header { display: none !important; }",
+      "#view {",
+      "  min-height: 100vh !important;",
+      "  padding-top: env(safe-area-inset-top) !important;",
+      "}"
+    ].join("\n");
+  }
+
+  function startHeaderHider() {
+    if (!hideHeader) {
+      return;
+    }
+    const styleId = "haos-kiosk-header-style";
+    let tick = 0;
+    // HA renders inside shadow roots, which a document MutationObserver cannot see; poll cheaply
+    // and re-apply whenever a new hui-root is created (dashboard navigation, reconnect).
+    const apply = () => {
+      tick += 1;
+      const huiRoot = findHuiRoot(tick % 5 === 0);
+      const root = huiRoot && huiRoot.shadowRoot;
+      if (!root || root.getElementById(styleId)) {
+        return;
+      }
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = buildHeaderStyle();
+      root.appendChild(style);
+    };
+    apply();
+    setInterval(apply, 1000);
   }
 
   function dispatchComposed(target, type) {
@@ -250,9 +284,7 @@
       return;
     }
 
-    if (checkbox.tagName && checkbox.tagName.toLowerCase() === "input") {
-      checkbox.checked = true;
-    } else if ("checked" in checkbox) {
+    if ("checked" in checkbox) {
       checkbox.checked = true;
     } else {
       checkbox.setAttribute("checked", "");
@@ -300,8 +332,7 @@
     if (!username || !password) {
       return;
     }
-    const isAuthPage = window.location.pathname.includes("/auth/");
-    if (!isAuthPage) {
+    if (!window.location.pathname.includes("/auth/")) {
       return;
     }
 
@@ -347,6 +378,10 @@
     return origin + "/auth/authorize?response_type=code&client_id=" + clientId + "&redirect_uri=" + redirectUri;
   }
 
+  function isAuthPage() {
+    return window.location.pathname.includes("/auth/");
+  }
+
   function isAuthCallbackUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get("auth_callback") === "1" || params.has("code");
@@ -362,128 +397,152 @@
     return true;
   }
 
-  function startWsWatchdog() {
-    if (window.__haosKioskWsWatchdogStarted) {
-      return;
+  // Only navigate when HA answers; otherwise Chromium would land on its own network error
+  // page, where this extension cannot run and the kiosk would stay stuck.
+  async function isServerReachable() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(window.location.origin + "/manifest.json", {
+        cache: "no-store",
+        credentials: "omit",
+        signal: controller.signal
+      });
+      return res.ok;
+    } catch (_err) {
+      return false;
+    } finally {
+      clearTimeout(timer);
     }
-    window.__haosKioskWsWatchdogStarted = true;
+  }
+
+  async function safeNavigate(target) {
+    if (!canReloadNow()) {
+      return false;
+    }
+    if (!(await isServerReachable())) {
+      window.__haosKioskLastReload = 0;
+      return false;
+    }
+    if (target) {
+      window.location.href = target;
+    } else {
+      window.location.reload();
+    }
+    return true;
+  }
+
+  function readInitFailures() {
+    try {
+      return Number(window.sessionStorage.getItem(INIT_FAILURE_KEY)) || 0;
+    } catch (_err) {
+      return 0;
+    }
+  }
+
+  function writeInitFailures(value) {
+    try {
+      if (value) {
+        window.sessionStorage.setItem(INIT_FAILURE_KEY, String(value));
+      } else {
+        window.sessionStorage.removeItem(INIT_FAILURE_KEY);
+      }
+    } catch (_err) {
+      // ignore
+    }
+  }
+
+  // Reads the websocket state published by page-probe.js (runs in the page's main world).
+  function startWsWatchdog() {
     let disconnectedCount = 0;
     setInterval(() => {
-      if (isAuthCallbackUrl()) {
+      if (isAuthPage() || isAuthCallbackUrl()) {
         return;
       }
-      const app = window.APP;
-      const connected = app && app.connection && app.connection.connected;
-      if (connected === false) {
+      const state = document.documentElement.dataset.haosKioskWs;
+      if (state === "disconnected") {
         disconnectedCount += 1;
-      } else if (connected === true) {
+      } else if (state === "connected") {
         disconnectedCount = 0;
       }
-      if (disconnectedCount >= 3 && canReloadNow()) {
-        window.location.reload();
+      if (disconnectedCount >= 3) {
+        safeNavigate().then((navigated) => {
+          if (navigated) {
+            disconnectedCount = 0;
+          }
+        });
       }
     }, 10000);
   }
 
+  // Detects a stuck ha-init-page ("Unable to connect to Home Assistant"). First recovery step is
+  // a reload; if that does not help and auto-login is configured, stale tokens are dropped.
   function startLoadFailureWatchdog() {
-    if (window.__haosKioskLoadWatchdogStarted) {
-      return;
-    }
-    window.__haosKioskLoadWatchdogStarted = true;
     let failCount = 0;
     setInterval(() => {
-      if (isAuthCallbackUrl()) {
+      if (isAuthPage() || isAuthCallbackUrl()) {
         return;
       }
-      const bodyText = document.body ? document.body.textContent || "" : "";
-      if (bodyText.includes("Unable to connect to Home Assistant")) {
-        failCount += 1;
-      } else {
+      if (isAppLoaded()) {
         failCount = 0;
+        writeInitFailures(0);
+        return;
       }
-      if (failCount >= 3 && canReloadNow()) {
-        window.location.reload();
+      const initPage = findInitPage();
+      if (!initPage) {
+        failCount = 0;
+        return;
       }
+      failCount += 1;
+      if (failCount < 3) {
+        return;
+      }
+
+      const failures = readInitFailures();
+      const connectError = deepText(initPage).includes("Unable to connect");
+      if (failures >= 1 && connectError && username && password) {
+        safeNavigate(buildAuthUrl()).then((navigated) => {
+          if (navigated) {
+            safeLocalStorageRemove("hassTokens");
+            writeInitFailures(0);
+          }
+        });
+        return;
+      }
+
+      safeNavigate().then((navigated) => {
+        if (navigated) {
+          writeInitFailures(failures + 1);
+          failCount = 0;
+        }
+      });
     }, 5000);
   }
 
-  function installUnhandledRejectionGuard() {
-    if (window.__haosKioskUnhandledGuard) {
-      return;
-    }
-    window.__haosKioskUnhandledGuard = true;
-    window.addEventListener("unhandledrejection", (event) => {
-      const reason = event.reason;
-      const message = typeof reason === "string"
-        ? reason
-        : (reason && reason.message) ? reason.message : "";
-      if (!message) {
-        return;
-      }
-      if (
-        message.includes("Load failed") ||
-        message.includes("Failed to fetch") ||
-        message.includes("NetworkError") ||
-        message.includes("AbortError") ||
-        message.includes("ServiceWorker")
-      ) {
-        event.preventDefault();
-      }
-    });
-  }
-
   function startRefreshTimer() {
-    if (window.__haosKioskRefreshTimerStarted) {
-      return;
-    }
-    window.__haosKioskRefreshTimerStarted = true;
     const intervalMs = Math.max(0, Number(refreshIntervalSec) * 1000);
     if (!intervalMs) {
       return;
     }
     setInterval(() => {
-      if (isAuthCallbackUrl() || document.hidden) {
+      if (isAuthPage() || isAuthCallbackUrl() || document.hidden) {
         return;
       }
-      if (canReloadNow()) {
-        window.location.reload();
-      }
+      safeNavigate();
     }, intervalMs);
   }
 
-
-  function handleConnectionError() {
-    if (window.__haosKioskAuthRedirected) {
-      return;
-    }
-    if (isAuthCallbackUrl()) {
-      return;
-    }
-    const bodyText = document.body ? document.body.textContent || "" : "";
-    if (!bodyText.includes("Unable to connect to Home Assistant")) {
-      return;
-    }
-    window.__haosKioskAuthRedirected = true;
-    try {
-      window.localStorage.removeItem("hassTokens");
-    } catch (err) {
-      console.warn("haos-kiosk: failed to clear tokens", err);
-    }
-    const authUrl = buildAuthUrl();
-    setTimeout(() => {
-      window.location.href = authUrl;
-    }, 1000);
-  }
-
   function boot() {
+    if (window.__haosKioskBooted) {
+      return;
+    }
+    window.__haosKioskBooted = true;
     applySettings();
-    injectHeaderStyle();
+    startHeaderHider();
     attemptAutoLogin();
-    installUnhandledRejectionGuard();
     startWsWatchdog();
     startLoadFailureWatchdog();
     startRefreshTimer();
-    handleConnectionError();
   }
 
   if (document.readyState === "loading") {

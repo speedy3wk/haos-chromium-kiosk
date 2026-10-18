@@ -5,12 +5,15 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 
 ## Features
 - Chromium in kiosk mode on the HAOS host HDMI output
-- Optional auto-login (username/password)
+- Optional auto-login (username/password) — the bundled extension only runs on the configured Home Assistant host
 - Screen timeout and display rotation
 - HDMI/USB audio sink selection
 - Display reconnect monitoring — reinitializes xrandr/color/HDR settings automatically when the display is disconnected and reconnected (e.g. TV power cycle, AVR switch)
 - HDR and color space configuration via xrandr (AMD/Nvidia; Intel: Broadcast RGB)
 - Chromium process watchdog — detects crashes and restarts Chromium automatically
+- Waits for Home Assistant to be reachable before launching Chromium (no stuck browser error page after a reboot)
+- Browser-side recovery — reloads the dashboard when the websocket stays disconnected or the "Unable to connect" page persists (only once HA answers again)
+- Exits when Xorg dies so the Supervisor watchdog can restart the add-on
 - Automatic startup on HAOS boot (`boot: auto`) — no manual intervention needed after a system restart
 - Extension-based UI tweaks (sidebar mode, header, theme, dark mode)
 - Clean startup log with optional verbose debug output
@@ -25,14 +28,14 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 | `ha_username` / `ha_password` | _(empty)_ | Auto-login credentials (optional) |
 | `dark_mode` | `true` | Force Chromium dark mode |
 | `ha_theme` | _(empty)_ | Home Assistant theme name (optional) |
-| `ha_sidebar` | `full` | Sidebar visibility: `full` \| `narrow` \| `none` \| `auto` |
+| `ha_sidebar` | `full` | Sidebar visibility: `full` \| `narrow` (icons only) \| `none` \| `auto` (same as `narrow`) |
 | `hide_header` | `false` | Hide the Home Assistant header bar |
-| `zoom_level` | `100` | Browser zoom level (100 = normal) |
-| `login_delay` | `2` | Seconds before auto-login attempt |
+| `zoom_level` | `100` | Browser zoom level (100 = normal, 25–400) |
+| `login_delay` | `2` | Seconds before auto-login attempt (0–60) |
 | `browser_refresh` | `0` | Page refresh interval in seconds (0 = disabled) |
 | `browser_mod_id` | `haos_kiosk` | ID sent as `browser_mod` browser-id |
 | `clear_chromium_on_start` | `false` | Wipe Chromium profile on every startup |
-| `software_rendering` | `false` | Force CPU-only rendering via SwiftShader (fallback for GPU issues) |
+| `software_rendering` | `false` | Disable GPU acceleration and render on the CPU (fallback for GPU issues) |
 
 ### Display Hardware
 | Option | Default | Description |
@@ -51,7 +54,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 | `video_profile_preset` | `passthrough` | Applies a preset for `hdr_mode`, `color_space`, `rgb_range` — see presets below |
 | `hdr_mode` | `auto` | HDR via xrandr `max bpc` / Colorspace: `auto` \| `off` \| `on` |
 | `color_space` | `auto` | Color output mode — `auto`, `rgb`, `yuv`, or an explicit profile name (see below) |
-| `rgb_range` | `auto` | Broadcast RGB range: `auto` \| `full` \| `limited` (only applies to RGB output) |
+| `rgb_range` | `auto` | Broadcast RGB range: `auto` \| `full` \| `limited` (applied with `color_space` `auto`, `rgb` or an RGB profile) |
 
 ### Debug
 | Option | Default | Description |
@@ -64,7 +67,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 
 | Preset | HDR | Color Space | RGB Range | Use Case |
 |---|---|---|---|---|
-| `passthrough` | auto | auto | auto | Default — let the display and driver negotiate |
+| `passthrough` | auto | auto | auto | Default — no xrandr color/HDR property is touched; display and driver negotiate |
 | `custom` | _(from individual options)_ | — | — | Full manual control |
 | `sdr_rgb_limited` | off | rgb | limited | SDR with limited RGB (16–235), common for TV displays |
 | `sdr_bt709_ycc` | off | bt709 | auto | SDR YCC BT.709, typical broadcast/TV signal style |
@@ -87,6 +90,7 @@ Explicit profile values (anything other than `auto`, `rgb`, `yuv`) set an exact 
 - **Intel (i915/modesetting):** Only `Broadcast RGB` (`rgb_range`) is reliably available. xrandr `Colorspace`/`ColorSpace` properties are not exposed by i915 — HDR and explicit color profiles will have no effect. Use `auto` or `rgb`.
 - **AMD (amdgpu) / Nvidia:** Full xrandr color space and HDR property support; all `color_space` values and presets work as intended.
 - `rgb_range` is ignored for YCC-based profiles.
+- **HDR under X11:** `hdr_mode: on` only switches the link to 10/12 bpc and BT.2020 colorimetry. X11 cannot send HDR metadata and Chromium renders SDR content, so colors may look washed out. Use it only if your display handles this well.
 
 ## Logging
 
@@ -98,7 +102,8 @@ In normal operation the add-on log shows only:
 Enable `debug_logging: true` for verbose output: DRM connector details, xorg.conf, xrandr property queries, connectivity checks, and all internal state changes.
 
 ## Notes
-- Auto-login and UI tweaks are injected via a bundled Chromium extension.
+- Auto-login and UI tweaks are injected via a bundled Chromium extension, loaded with `--load-extension`. Google Chrome ignores this flag since version 137, but the unbranded Alpine Chromium build still supports it.
+- Since Home Assistant 2026.2 the selected theme is stored in the user profile on the server. If the kiosk user has saved a theme there, it overrides `ha_theme`/`dark_mode`. Use a dedicated kiosk user without a saved theme preference.
 - Home Assistant 2026.2+ reorganized some dashboard paths. If the kiosk shows a redirect or blank panel, update `ha_dashboard` to match the current URL.
 - `video_profile_preset=passthrough` avoids any explicit forced color/HDR state and is the safest default.
 - Created with AI tools, reviewed and tested by me.

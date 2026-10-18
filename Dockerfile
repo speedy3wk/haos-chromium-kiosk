@@ -1,51 +1,32 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
-FROM $BUILD_FROM
+# Multi-arch Home Assistant base image (Alpine). Pinned for reproducible builds;
+# the Supervisor no longer passes BUILD_FROM (since 2026.04).
+FROM ghcr.io/home-assistant/base:3.24
 
 RUN apk add --no-cache \
     chromium \
     xorg-server \
     xf86-video-modesetting \
     xf86-input-libinput \
-    libinput \
     libinput-udev \
-    libevdev \
     udev \
     mesa-dri-gallium \
     mesa-egl \
     mesa-gles \
-    libdrm \
-    libxkbcommon \
-    ttf-dejavu \
+    font-dejavu \
     util-linux \
     openbox \
     dbus \
     pulseaudio-utils \
-    xdotool \
-    xinput \
     xrandr \
     xset \
     unclutter-xfixes \
-    setxkbmap \
-    onboard \
-    py3-xlib \
-    patch \
-    bash \
-    x11vnc \
-    bc \
-    python3 \
-    py3-aiohttp \
-    py3-websockets \
-    ca-certificates
+    python3
 
 COPY run.sh /
 RUN chmod a+x /run.sh
 
 COPY xorg.conf.default /etc/X11/
 
-COPY translations /translations
-
 COPY extension /haos-extension
-
-ENV DISPLAY=:0
 
 CMD ["/run.sh"]

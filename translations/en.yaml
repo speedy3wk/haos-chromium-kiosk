@@ -16,10 +16,10 @@ configuration:
     description: Force Chromium dark mode
   ha_theme:
     name: HA Theme
-    description: Home Assistant theme name (optional)
+    description: Home Assistant theme name (optional). A theme saved in the kiosk user's HA profile takes precedence.
   ha_sidebar:
     name: HA Sidebar
-    description: "Controls sidebar visibility: full | narrow | none (hidden) | auto"
+    description: "Controls sidebar visibility: full | narrow (icons only) | none (hidden) | auto (same as narrow)"
   hide_header:
     name: Hide Header
     description: Hide Home Assistant header
@@ -37,22 +37,22 @@ configuration:
     description: "Main switch: passthrough (default, no changes) | sdr_rgb_limited (TV/limited-range) | sdr_bt709_ycc | hdr_bt2020_ycc | custom (use advanced options below)"
   software_rendering:
     name: Software Rendering
-    description: Disable Chromium GPU acceleration (SwiftShader CPU fallback). Only enable if you see a black screen with hardware rendering.
+    description: Disable Chromium GPU acceleration (CPU rendering). Only enable if you see a black screen with hardware rendering.
   hdr_mode:
     name: Advanced HDR Mode
-    description: "preset=custom only. Requires HDR-capable display and GPU driver support (not available on Intel i915). auto | off | on"
+    description: "preset=custom only. Requires HDR-capable display and GPU driver support (not available on Intel i915). Under X11 this only sets 10-bit + BT.2020 signaling without HDR metadata; SDR content may look washed out. auto | off | on"
   color_space:
     name: Advanced Color Space
     description: "preset=custom only. auto = let driver decide. rgb = force RGB output + Broadcast RGB range. yuv = best available YCC profile. Explicit profiles (bt709, bt2020_ycc, bt2020_rgb, oprgb, dci_p3_d65 ...): set exact xrandr colorspace. Colorspace properties require AMD/Nvidia. Intel i915: only auto/rgb reliably works."
   rgb_range:
     name: Advanced RGB Range
-    description: "preset=custom only, RGB path only. Controls Broadcast RGB (full vs. limited 16-235). Works on most GPUs incl. Intel. auto | full | limited"
+    description: "preset=custom only. Controls Broadcast RGB (full vs. limited 16-235); applied with color_space auto, rgb or an RGB profile. Works on most GPUs incl. Intel. auto | full | limited"
   force_output_on:
     name: Force Output On
     description: Try to keep output active (software EDID ghost style)
   login_delay:
     name: Login Delay
-    description: Seconds before auto-login attempt
+    description: Seconds before auto-login attempt (0-60)
   browser_refresh:
     name: Browser Refresh
     description: Seconds between refreshes (0 = disabled)
@@ -64,7 +64,7 @@ configuration:
     description: Reset Chromium profile on startup
   zoom_level:
     name: Zoom Level
-    description: 100 = normal
+    description: 100 = normal (25-400)
   screen_timeout:
     name: Screen Timeout
     description: Seconds before screen blank (0 = never)

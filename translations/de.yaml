@@ -16,10 +16,10 @@ configuration:
     description: Erzwingt Dark Mode in Chromium
   ha_theme:
     name: HA Theme
-    description: Home Assistant Theme-Name (optional)
+    description: Home Assistant Theme-Name (optional). Ein im HA-Profil des Kiosk-Benutzers gespeichertes Theme hat Vorrang.
   ha_sidebar:
     name: HA Sidebar
-    description: "Sidebar-Sichtbarkeit: full | narrow | none (ausgeblendet) | auto"
+    description: "Sidebar-Sichtbarkeit: full | narrow (nur Icons) | none (ausgeblendet) | auto (wie narrow)"
   hide_header:
     name: Header ausblenden
     description: Home Assistant Header ausblenden
@@ -37,22 +37,22 @@ configuration:
     description: "Hauptschalter: passthrough (Standard, keine Aenderungen) | sdr_rgb_limited (TV / Limited Range) | sdr_bt709_ycc | hdr_bt2020_ycc | custom (erweiterte Optionen nutzen)"
   software_rendering:
     name: Software Rendering
-    description: Deaktiviert Chromium GPU-Beschleunigung (SwiftShader CPU-Fallback). Nur aktivieren bei Black-Screen-Problemen mit Hardware-Rendering.
+    description: Deaktiviert Chromium GPU-Beschleunigung (CPU-Rendering). Nur aktivieren bei Black-Screen-Problemen mit Hardware-Rendering.
   hdr_mode:
     name: Advanced HDR Modus
-    description: "Nur bei preset=custom. Benoetigt HDR-faehiges Display und Treiber-Unterstuetzung (nicht verfuegbar auf Intel i915). auto | off | on"
+    description: "Nur bei preset=custom. Benoetigt HDR-faehiges Display und Treiber-Unterstuetzung (nicht verfuegbar auf Intel i915). Unter X11 wird nur 10-bit + BT.2020 signalisiert, ohne HDR-Metadaten; SDR-Inhalte koennen blass wirken. auto | off | on"
   color_space:
     name: Advanced Farbraum
     description: "Nur bei preset=custom. auto = Treiber entscheidet. rgb = RGB-Ausgang + Broadcast RGB Range. yuv = bestes verfuegbares YCC-Profil. Explizite Profile (bt709, bt2020_ycc, bt2020_rgb, oprgb, dci_p3_d65 ...): setzt genauen xrandr Colorspace. Colorspace-Properties erfordern AMD/Nvidia. Intel i915: nur auto/rgb zuverlaessig."
   rgb_range:
     name: Advanced RGB Bereich
-    description: "Nur bei preset=custom und RGB-Pfad. Steuert Broadcast RGB (full vs. limited 16-235). Funktioniert auf den meisten GPUs inkl. Intel. auto | full | limited"
+    description: "Nur bei preset=custom. Steuert Broadcast RGB (full vs. limited 16-235); wird bei color_space auto, rgb oder einem RGB-Profil angewendet. Funktioniert auf den meisten GPUs inkl. Intel. auto | full | limited"
   force_output_on:
     name: Ausgang erzwingen
     description: Versucht den Ausgang aktiv zu halten (Software-EDID-Ghost)
   login_delay:
     name: Login Delay
-    description: Sekunden bis zum Auto-Login-Versuch
+    description: Sekunden bis zum Auto-Login-Versuch (0-60)
   browser_refresh:
     name: Browser Refresh
     description: Sekunden zwischen Refreshes (0 = aus)
@@ -64,7 +64,7 @@ configuration:
     description: Chromium-Profil beim Start zuruecksetzen
   zoom_level:
     name: Zoom Level
-    description: 100 = normal
+    description: 100 = normal (25-400)
   screen_timeout:
     name: Screen Timeout
     description: Sekunden bis Bildschirm aus (0 = nie)

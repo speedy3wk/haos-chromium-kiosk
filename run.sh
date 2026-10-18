@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bashio
+#!/command/with-contenv bashio
 set -euo pipefail
 
 export NO_PROXY=127.0.0.1,localhost
@@ -99,27 +99,28 @@ apply_video_profile_preset
 HA_URL_BASE="$HA_URL"
 HA_URL_BASE="${HA_URL_BASE%/}"
 if [ -n "$HA_DASHBOARD" ]; then
-  HA_URL_BASE="$HA_URL_BASE/$HA_DASHBOARD"
+  HA_URL_BASE="$HA_URL_BASE/${HA_DASHBOARD#/}"
 fi
 
+# Origin (scheme://host[:port]) in the same form the browser reports via location.origin.
 HA_URL_HOST="$(python3 - <<'PY'
 import os
 from urllib.parse import urlparse
 
 value = os.environ.get("HA_URL", "")
 parsed = urlparse(value)
-if parsed.scheme and parsed.netloc:
-  print(f"{parsed.scheme}://{parsed.netloc}".rstrip("/"))
+if parsed.scheme and parsed.hostname:
+  default_port = {"http": 80, "https": 443}.get(parsed.scheme)
+  host = parsed.hostname
+  if ":" in host:
+    host = f"[{host}]"
+  if parsed.port and parsed.port != default_port:
+    host = f"{host}:{parsed.port}"
+  print(f"{parsed.scheme}://{host}")
 else:
   print(value.rstrip("/"))
 PY
 )"
-
-case "$HA_URL_HOST" in
-  http://127.0.0.1:8123|http://localhost:8123)
-    bashio::log.warning "haos-kiosk: HA_URL_HOST is localhost; using localhost as-is"
-    ;;
-esac
 
 export HA_URL_BASE
 export HA_URL_HOST
@@ -130,13 +131,6 @@ if [ "$CLEAR_CHROMIUM_ON_START" = true ]; then
 fi
 
 bashio::log.info "haos-kiosk: url=$HA_URL_BASE"
-if [ -n "$HA_DASHBOARD" ]; then
-  case "$HA_DASHBOARD" in
-    lovelace*|dashboard*|hassio*|addon*|developer-tools*|config*)
-      bashio::log.warning "haos-kiosk: ha_dashboard looks like a legacy or internal path; verify it still resolves on HA 2026.2+"
-      ;;
-  esac
-fi
 bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING"
 bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  rgb=$RGB_RANGE"
 bashio::log.info "haos-kiosk: browser: dark=$DARK_MODE  sidebar=$HA_SIDEBAR  header=$HIDE_HEADER  timeout=${SCREEN_TIMEOUT}s  audio=$AUDIO_SINK"
@@ -192,7 +186,7 @@ if host:
   except Exception as exc:
     _warn(f"dns {host}: {exc}")
 
-_check_tcp(parsed.hostname, parsed.port or 8123)
+_check_tcp(parsed.hostname, parsed.port or {"http": 80, "https": 443}.get(parsed.scheme))
 
 _check_url("ha_url", ha_url)
 _check_url("ha_url_base", ha_url_base)
@@ -204,7 +198,6 @@ dbus-daemon --system --fork
 DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address || true)
 if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
   export DBUS_SESSION_BUS_ADDRESS
-  echo "export DBUS_SESSION_BUS_ADDRESS='$DBUS_SESSION_BUS_ADDRESS'" >> "$HOME/.profile" || true
 fi
 
 if [ "${DEBUG_LOGGING:-false}" = "true" ]; then
@@ -266,14 +259,6 @@ if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
   [ -n "$selected_card" ] && bashio::log.info "haos-kiosk: GPU $selected_card  connector=$selected_connector"
 fi
 
-if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
-  fallback_card_path="$(find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sort | head -n1 || true)"
-  if [ -n "$fallback_card_path" ]; then
-    selected_card="${fallback_card_path##*/}"
-    bashio::log.warning "haos-kiosk: using fallback video card $selected_card without connected status"
-  fi
-fi
-
 if [ -z "$selected_card" ]; then
   fallback_card_path="$(find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sort | head -n1 || true)"
   if [ -n "$fallback_card_path" ]; then
@@ -323,10 +308,12 @@ NOCURSOR=""
 if [ "$HIDE_CURSOR" = true ]; then
   NOCURSOR="-nocursor"
 fi
-Xorg $NOCURSOR :0 -noreset -nolisten tcp </dev/null 2>&1 | grep -v "Could not resolve keysym XF86\|Errors from xkbcomp are not fatal\|XKEYBOARD keymap compiler (xkbcomp) reports" &
+Xorg $NOCURSOR :0 -noreset -nolisten tcp </dev/null \
+  > >(grep -v "Could not resolve keysym XF86\|Errors from xkbcomp are not fatal\|XKEYBOARD keymap compiler (xkbcomp) reports") 2>&1 &
+XORG_PID=$!
 
 XSTARTUP=20
-for i in $(seq 1 $XSTARTUP); do
+for _ in $(seq 1 $XSTARTUP); do
   if xset q >/dev/null 2>&1; then
     break
   fi
@@ -356,14 +343,7 @@ if [ "$HIDE_CURSOR" = true ]; then
   unclutter-xfixes --start-hidden --hide-on-touch --fork --timeout 1 >/dev/null 2>&1 || true
 fi
 
-ACTIVE_OUTPUT="$(xrandr | awk '/ connected/{print $1; exit}')"
-if [ -z "$ACTIVE_OUTPUT" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
-  ACTIVE_OUTPUT="$(xrandr | awk '/ disconnected/{print $1; exit}')"
-fi
-
-if [ -z "$ACTIVE_OUTPUT" ]; then
-  bashio::log.warning "haos-kiosk: no active xrandr output detected yet; waiting for HDMI/AVR availability"
-fi
+ACTIVE_OUTPUT=""
 
 log_xrandr_output_capabilities() {
   local output="$1"
@@ -412,10 +392,14 @@ log_xrandr_output_capabilities() {
 LAST_CAPS_OUTPUT=""
 LAST_FULL_COLOR_APPLY_OUTPUT=""
 
+# xrandr output is captured first and then parsed, so an early `exit` in awk cannot SIGPIPE
+# xrandr and turn the pipeline into a false failure under `set -o pipefail`.
 xrandr_output_has_property() {
   local output="$1"
   local property="$2"
-  xrandr --verbose | awk -v output="$output" -v property="$property" '
+  local verbose
+  verbose="$(xrandr --verbose 2>/dev/null)" || return 1
+  awk -v output="$output" -v property="$property" '
     $1 == output && ($2 == "connected" || $2 == "disconnected") { in_output = 1; next }
     in_output && $0 ~ /^[^ \t]/ { exit }
     in_output {
@@ -427,7 +411,7 @@ xrandr_output_has_property() {
       }
     }
     END { exit(found ? 0 : 1) }
-  '
+  ' <<<"$verbose"
 }
 
 try_set_xrandr_property() {
@@ -444,117 +428,103 @@ try_set_xrandr_property() {
   return 1
 }
 
+# Drivers expose the colorspace property under different names.
+find_colorspace_property() {
+  local candidate
+  for candidate in "Colorspace" "ColorSpace" "color space"; do
+    if xrandr_output_has_property "$ACTIVE_OUTPUT" "$candidate"; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+set_colorspace() {
+  local prop
+  prop="$(find_colorspace_property)" || return 1
+  try_set_xrandr_property "$ACTIVE_OUTPUT" "$prop" "$@"
+}
+
+set_max_bpc() {
+  xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc" || return 1
+  try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "$@"
+}
+
 apply_hdr_mode() {
   local applied=false
   case "$HDR_MODE" in
-    auto)
-      return 0
-      ;;
     on)
       log_debug "haos-kiosk: applying HDR mode: on"
-      if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "10" "12"; then
-          applied=true
-        fi
-      fi
-      if xrandr_output_has_property "$ACTIVE_OUTPUT" "Colorspace"; then
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "BT2020_RGB" "BT2020_YCC"; then
-          applied=true
-        fi
-      elif xrandr_output_has_property "$ACTIVE_OUTPUT" "ColorSpace"; then
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "BT2020_RGB" "BT2020_YCC"; then
-          applied=true
-        fi
-      elif xrandr_output_has_property "$ACTIVE_OUTPUT" "color space"; then
-        if try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "BT2020_RGB" "BT2020_YCC"; then
-          applied=true
-        fi
-      fi
+      set_max_bpc "10" "12" && applied=true
+      set_colorspace "BT2020_RGB" "BT2020_YCC" && applied=true
       if [ "$applied" = false ]; then
         bashio::log.warning "haos-kiosk: HDR requested but no compatible xrandr property was accepted"
       fi
       ;;
     off)
       log_debug "haos-kiosk: applying HDR mode: off"
-      if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
-      fi
-      if xrandr_output_has_property "$ACTIVE_OUTPUT" "Colorspace"; then
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "Default" "RGB" "RGB Full" || true
-      elif xrandr_output_has_property "$ACTIVE_OUTPUT" "ColorSpace"; then
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "Default" "RGB" "RGB Full" || true
-      elif xrandr_output_has_property "$ACTIVE_OUTPUT" "color space"; then
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "Default" "RGB" "RGB Full" || true
-      fi
+      set_max_bpc "8" || true
+      set_colorspace "Default" "RGB" "RGB Full" || true
       ;;
   esac
+  return 0
+}
+
+apply_rgb_range() {
+  case "${RGB_RANGE,,}" in
+    auto)
+      try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || \
+        bashio::log.warning "haos-kiosk: Broadcast RGB automatic mode could not be set"
+      ;;
+    full)
+      try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full" || \
+        bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB could not be set"
+      ;;
+    limited)
+      try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited" || \
+        bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB could not be set"
+      ;;
+    *)
+      bashio::log.warning "haos-kiosk: unknown rgb_range='$RGB_RANGE', using auto"
+      try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
+      ;;
+  esac
+  return 0
 }
 
 apply_color_space() {
   local target="${COLOR_SPACE,,}"
-  local prop=""
   local applied=false
-  local rgb_range_value="${RGB_RANGE,,}"
-
-  if [ "$target" = "auto" ]; then
-    return 0
-  fi
-
-  apply_rgb_range() {
-    case "$rgb_range_value" in
-      auto)
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || \
-          bashio::log.warning "haos-kiosk: Broadcast RGB automatic mode could not be set"
-        ;;
-      full)
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Full" || \
-          bashio::log.warning "haos-kiosk: requested rgb_range='full' but Broadcast RGB could not be set"
-        ;;
-      limited)
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Limited 16:235" "Limited" || \
-          bashio::log.warning "haos-kiosk: requested rgb_range='limited' but Broadcast RGB could not be set"
-        ;;
-      *)
-        bashio::log.warning "haos-kiosk: unknown rgb_range='$RGB_RANGE', using auto"
-        try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
-        ;;
-    esac
-  }
-
-  for candidate in "Colorspace" "ColorSpace" "color space"; do
-    if xrandr_output_has_property "$ACTIVE_OUTPUT" "$candidate"; then
-      prop="$candidate"
-      break
-    fi
-  done
-
-  try_set_cs() {
-    [ -n "$prop" ] && try_set_xrandr_property "$ACTIVE_OUTPUT" "$prop" "$@"
-  }
 
   case "$target" in
+    auto)
+      # Broadcast RGB is also the only reliable knob on Intel, so honor an explicit range here too.
+      [ "${RGB_RANGE,,}" != "auto" ] && apply_rgb_range
+      return 0
+      ;;
     rgb)
-      try_set_cs "RGB" "RGB Full" "opRGB" "Default" && applied=true || true
+      set_colorspace "RGB" "RGB Full" "opRGB" "Default" && applied=true
       apply_rgb_range
       ;;
     yuv)
-      try_set_cs "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601" && applied=true || true
+      set_colorspace "BT709_YCC" "BT2020_YCC" "SMPTE_170M_YCC" "XVYCC_709" "XVYCC_601" && applied=true
       ;;
     # Explicit YCC profiles
-    bt709)       try_set_cs "BT709_YCC"      && applied=true || true ;;
-    bt2020_ycc)  try_set_cs "BT2020_YCC"     && applied=true || true ;;
-    bt2020_cycc) try_set_cs "BT2020_CYCC"    && applied=true || true ;;
-    smpte170m)   try_set_cs "SMPTE_170M_YCC" && applied=true || true ;;
-    xvycc_709)   try_set_cs "XVYCC_709"      && applied=true || true ;;
-    xvycc_601)   try_set_cs "XVYCC_601"      && applied=true || true ;;
-    sycc_601)    try_set_cs "SYCC_601"        && applied=true || true ;;
-    opycc_601)   try_set_cs "opYCC_601"       && applied=true || true ;;
+    bt709)       set_colorspace "BT709_YCC"      && applied=true ;;
+    bt2020_ycc)  set_colorspace "BT2020_YCC"     && applied=true ;;
+    bt2020_cycc) set_colorspace "BT2020_CYCC"    && applied=true ;;
+    smpte170m)   set_colorspace "SMPTE_170M_YCC" && applied=true ;;
+    xvycc_709)   set_colorspace "XVYCC_709"      && applied=true ;;
+    xvycc_601)   set_colorspace "XVYCC_601"      && applied=true ;;
+    sycc_601)    set_colorspace "SYCC_601"       && applied=true ;;
+    opycc_601)   set_colorspace "opYCC_601"      && applied=true ;;
     # Explicit RGB profiles — also apply Broadcast RGB range
-    bt2020_rgb)     try_set_cs "BT2020_RGB"         && applied=true || true; apply_rgb_range ;;
-    oprgb)          try_set_cs "opRGB"               && applied=true || true; apply_rgb_range ;;
-    dci_p3_d65)     try_set_cs "DCI-P3_RGB_D65"     && applied=true || true; apply_rgb_range ;;
-    dci_p3_theater) try_set_cs "DCI-P3_RGB_Theater" && applied=true || true; apply_rgb_range ;;
-    default)        try_set_cs "Default"             && applied=true || true; apply_rgb_range ;;
+    bt2020_rgb)     set_colorspace "BT2020_RGB"         && applied=true; apply_rgb_range ;;
+    oprgb)          set_colorspace "opRGB"              && applied=true; apply_rgb_range ;;
+    dci_p3_d65)     set_colorspace "DCI-P3_RGB_D65"     && applied=true; apply_rgb_range ;;
+    dci_p3_theater) set_colorspace "DCI-P3_RGB_Theater" && applied=true; apply_rgb_range ;;
+    default)        set_colorspace "Default"            && applied=true; apply_rgb_range ;;
     *)
       bashio::log.warning "haos-kiosk: unknown color_space='$COLOR_SPACE', skipping"
       return 0
@@ -571,20 +541,29 @@ apply_color_space() {
 read_xrandr_property_value() {
   local output="$1"
   local property="$2"
-  xrandr --verbose | awk -v output="$output" -v property="$property" '
+  local verbose
+  verbose="$(xrandr --verbose 2>/dev/null)" || return 1
+  awk -v output="$output" -v property="$property" '
     $1 == output && ($2 == "connected" || $2 == "disconnected") { in_output = 1; next }
     in_output && $0 ~ /^[^ \t]/ { exit }
     in_output {
       line = $0
       sub(/^[ \t]+/, "", line)
       if (index(line, property ":") == 1) {
-        sub("^" property ":[ \\t]*", "", line)
-        split(line, parts, /[ \\t]+/)
+        line = substr(line, length(property) + 2)
+        sub(/^[ \t]+/, "", line)
+        split(line, parts, /[ \t]+/)
         print parts[1]
         exit
       }
     }
-  '
+  ' <<<"$verbose"
+}
+
+reset_output_to_safe_baseline() {
+  set_max_bpc "8" || true
+  set_colorspace "Default" || true
+  try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
 }
 
 recover_bad_link_status() {
@@ -595,38 +574,21 @@ recover_bad_link_status() {
   fi
 
   bashio::log.warning "haos-kiosk: link-status became Bad, attempting safe HDMI recovery"
-  if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
-  fi
-  if xrandr_output_has_property "$ACTIVE_OUTPUT" "Colorspace"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "Default" || true
-  elif xrandr_output_has_property "$ACTIVE_OUTPUT" "ColorSpace"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "Default" || true
-  elif xrandr_output_has_property "$ACTIVE_OUTPUT" "color space"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "Default" || true
-  fi
-  if xrandr_output_has_property "$ACTIVE_OUTPUT" "Broadcast RGB"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" || true
-  fi
+  reset_output_to_safe_baseline
   xrandr --output "$ACTIVE_OUTPUT" --auto || true
 }
 
-reset_output_to_safe_baseline() {
-  # Reset to conservative values first so stale prior modes (e.g. BT2020) do not survive restarts.
-  if xrandr_output_has_property "$ACTIVE_OUTPUT" "max bpc"; then
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "max bpc" "8" || true
-  fi
-  try_set_xrandr_property "$ACTIVE_OUTPUT" "Colorspace" "Default" >/dev/null 2>&1 || \
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "ColorSpace" "Default" >/dev/null 2>&1 || \
-    try_set_xrandr_property "$ACTIVE_OUTPUT" "color space" "Default" >/dev/null 2>&1 || true
-  try_set_xrandr_property "$ACTIVE_OUTPUT" "Broadcast RGB" "Automatic" >/dev/null 2>&1 || true
+color_overrides_requested() {
+  [ "$HDR_MODE" != "auto" ] || [ "${COLOR_SPACE,,}" != "auto" ] || [ "${RGB_RANGE,,}" != "auto" ]
 }
 
 pick_active_output() {
+  local state
+  state="$(xrandr 2>/dev/null || true)"
   local output
-  output="$(xrandr | awk '/ connected/{print $1; exit}')"
+  output="$(awk '$2 == "connected" {print $1; exit}' <<<"$state")"
   if [ -z "$output" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
-    output="$(xrandr | awk '/ disconnected/{print $1; exit}')"
+    output="$(awk '$2 == "disconnected" {print $1; exit}' <<<"$state")"
   fi
   echo "$output"
 }
@@ -646,6 +608,9 @@ configure_display_output() {
   if [ "$reason" = "reconnect" ] && [ "$ACTIVE_OUTPUT" = "$LAST_FULL_COLOR_APPLY_OUTPUT" ]; then
     apply_full_color_stack=false
     log_debug "haos-kiosk: reconnect on same output, keeping previous color/HDR state"
+  elif ! color_overrides_requested; then
+    apply_full_color_stack=false
+    log_debug "haos-kiosk: passthrough color mode, leaving HDR/color/RGB range to the driver"
   fi
 
   if [ "$FORCE_OUTPUT_ON" = true ]; then
@@ -653,6 +618,7 @@ configure_display_output() {
   fi
 
   if [ "$apply_full_color_stack" = true ]; then
+    # Reset first so stale prior modes (e.g. BT2020) do not survive restarts.
     reset_output_to_safe_baseline
   fi
 
@@ -714,32 +680,38 @@ fi
 
 launch_chromium() {
   mkdir -p /data/chromium
-  local SOFTWARE_FLAGS=""
+  # A previous Chromium instance (crash, container restart) can leave stale profile locks behind,
+  # which makes the new instance refuse to start ("profile in use").
+  rm -f /data/chromium/SingletonLock /data/chromium/SingletonSocket /data/chromium/SingletonCookie
+
+  local extra_flags=()
   if [ "$SOFTWARE_RENDERING" = true ]; then
-    SOFTWARE_FLAGS="--disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode --use-gl=swiftshader"
+    extra_flags+=(--disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode)
   fi
+  if [ "$DARK_MODE" = true ]; then
+    extra_flags+=(--force-dark-mode)
+  fi
+
+  local scale_factor
+  scale_factor="$(awk -v z="$ZOOM_LEVEL" 'BEGIN { printf "%.2f", z / 100 }')"
 
   chromium \
     --no-sandbox \
     --disable-dev-shm-usage \
     --no-first-run \
     --no-default-browser-check \
-    --disable-features=TranslateUI,PasswordManagerOnboarding,PasswordManagerEnableUpdatingPasswords \
-    --disable-save-password-bubble \
+    --noerrdialogs \
+    --disable-features=Translate \
     --password-store=basic \
-    --use-mock-keychain \
-    $(if [ "$DARK_MODE" = true ]; then echo "--force-dark-mode --enable-features=WebUIDarkMode"; fi) \
     --disable-extensions-except=/data/haos-extension \
     --load-extension=/data/haos-extension \
     --autoplay-policy=no-user-gesture-required \
     --kiosk \
-    --start-fullscreen \
     --user-data-dir=/data/chromium \
-    $SOFTWARE_FLAGS \
-    --force-device-scale-factor=$(echo "scale=2; $ZOOM_LEVEL/100" | bc -l) \
+    "${extra_flags[@]}" \
+    --force-device-scale-factor="$scale_factor" \
     "$HA_URL_BASE" &
 }
-
 
 configure_chromium_prefs() {
   python3 - <<'PY'
@@ -756,9 +728,12 @@ except Exception:
   data = {}
 
 data["credentials_enable_service"] = False
-profile = data.get("profile", {})
+profile = data.setdefault("profile", {})
 profile["password_manager_enabled"] = False
-data["profile"] = profile
+# Pretend the last session ended cleanly so no "Restore pages?" bubble appears after power loss.
+profile["exit_type"] = "Normal"
+profile["exited_cleanly"] = True
+data.setdefault("translate", {})["enabled"] = False
 
 with open(prefs_path, "w", encoding="utf-8") as f:
   json.dump(data, f)
@@ -767,19 +742,15 @@ PY
 
 init_extension() {
   mkdir -p /data/haos-extension
+  rm -rf /data/haos-extension/*
   cp -a /haos-extension/. /data/haos-extension/
   python3 - <<'PY'
 import json
 import os
+from urllib.parse import urlparse
 
 def _as_bool(value: str) -> bool:
   return value.strip().lower() == "true"
-
-def _as_int_ms(value: str) -> int:
-  try:
-    return max(int(float(value) * 1000), 0)
-  except Exception:
-    return 0
 
 def _as_int(value: str) -> int:
   try:
@@ -787,10 +758,12 @@ def _as_int(value: str) -> int:
   except Exception:
     return 0
 
+ha_url_host = os.getenv("HA_URL_HOST", "").strip()
+
 config = {
-  "haUrlHost": os.getenv("HA_URL_HOST", "").strip(),
+  "haUrlHost": ha_url_host,
   "haUrlBase": os.getenv("HA_URL_BASE", "").strip(),
-  "haUrlHosts": [],
+  "haUrlHosts": [ha_url_host] if urlparse(ha_url_host).hostname else [],
   "username": os.getenv("HA_USERNAME", ""),
   "password": os.getenv("HA_PASSWORD", ""),
   "darkMode": _as_bool(os.getenv("DARK_MODE", "true")),
@@ -798,37 +771,73 @@ config = {
   "browserModId": os.getenv("BROWSER_MOD_ID", "haos_kiosk").strip(),
   "hideHeader": _as_bool(os.getenv("HIDE_HEADER", "false")),
   "theme": os.getenv("HA_THEME", ""),
-  "loginDelayMs": _as_int_ms(os.getenv("LOGIN_DELAY", "2")),
+  "loginDelayMs": _as_int(os.getenv("LOGIN_DELAY", "2")) * 1000,
   "refreshIntervalSec": _as_int(os.getenv("BROWSER_REFRESH", "0")),
 }
-
-def _host(url: str) -> str:
-  try:
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    if parsed.scheme and parsed.netloc:
-      return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-  except Exception:
-    pass
-  return ""
-
-hosts = set()
-for value in (config["haUrlHost"], config["haUrlBase"]):
-  host = _host(value)
-  if host:
-    hosts.add(host)
-config["haUrlHosts"] = sorted(hosts)
 
 with open("/data/haos-extension/config.js", "w", encoding="utf-8") as handle:
   handle.write("window.__HAOS_KIOSK_CONFIG = ")
   handle.write(json.dumps(config))
   handle.write(";\n")
+
+# Restrict the extension (and therefore the credentials) to the Home Assistant host.
+# Match patterns cannot contain ports, so content.js additionally checks the exact origin.
+parsed = urlparse(ha_url_host)
+if parsed.scheme in ("http", "https") and parsed.hostname:
+  host = parsed.hostname
+  if ":" in host:
+    host = f"[{host}]"
+  pattern = f"{parsed.scheme}://{host}/*"
+  manifest_path = "/data/haos-extension/manifest.json"
+  with open(manifest_path, "r", encoding="utf-8") as f:
+    manifest = json.load(f)
+  for script in manifest.get("content_scripts", []):
+    script["matches"] = [pattern]
+  manifest["host_permissions"] = [pattern]
+  with open(manifest_path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, indent=2)
 PY
 }
 
-bashio::log.info "haos-kiosk: launching Chromium"
+# Chromium shows its own network error page if HA is not reachable yet; the extension cannot run
+# there, so the kiosk would stay stuck. Wait (bounded) until HA answers before launching.
+wait_for_home_assistant() {
+  local timeout="${1:-180}"
+  if python3 - "$timeout" <<'PY'
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+url = os.environ.get("HA_URL_BASE") or os.environ.get("HA_URL", "")
+deadline = time.monotonic() + int(sys.argv[1])
+while time.monotonic() < deadline:
+  try:
+    req = urllib.request.Request(url, headers={"User-Agent": "haos-kiosk-check"})
+    with urllib.request.urlopen(req, timeout=5):
+      sys.exit(0)
+  except urllib.error.HTTPError:
+    sys.exit(0)
+  except Exception:
+    time.sleep(3)
+sys.exit(1)
+PY
+  then
+    log_debug "haos-kiosk: Home Assistant is reachable"
+  else
+    bashio::log.warning "haos-kiosk: Home Assistant not reachable after ${timeout}s, launching Chromium anyway"
+  fi
+}
+
+chromium_running() {
+  pgrep -f -- "--user-data-dir=/data/chromium" >/dev/null 2>&1
+}
+
 configure_chromium_prefs
 init_extension
+wait_for_home_assistant 180
+bashio::log.info "haos-kiosk: launching Chromium"
 launch_chromium
 
 
@@ -836,8 +845,10 @@ log_debug "haos-kiosk: starting Chromium watchdog"
 (
   sleep 5
   while true; do
-    if ! pgrep -f chromium >/dev/null 2>&1; then
+    if ! chromium_running; then
       bashio::log.warning "Chromium not running, restarting"
+      configure_chromium_prefs
+      wait_for_home_assistant 60
       launch_chromium
     fi
     sleep 10
@@ -873,6 +884,9 @@ log_debug "haos-kiosk: starting output reconnect monitor"
   done
 ) &
 
-while true; do
-  sleep 60
+# Exit when Xorg dies so the Supervisor (add-on watchdog) can restart the whole stack.
+while kill -0 "$XORG_PID" 2>/dev/null; do
+  sleep 10
 done
+bashio::log.error "haos-kiosk: Xorg exited unexpectedly, stopping add-on"
+exit 1
