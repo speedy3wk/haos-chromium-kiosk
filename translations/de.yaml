@@ -23,6 +23,12 @@ configuration:
   hide_header:
     name: Header ausblenden
     description: Home Assistant Header ausblenden
+  display_output:
+    name: Display-Auswahl
+    description: "Optional: auto oder leer = wie bisher. Nummer ab 1 aus dem Startlog oder DRM-Anschlussname (z.B. HDMI-A-1 oder eindeutig card1-HDMI-A-1). Nummern zaehlen beim Start angeschlossene Displays; Namen funktionieren auch bei abgezogenem Display."
+  display_mode:
+    name: Display-Betriebsart
+    description: "Nur bei expliziter Display-Auswahl: exclusive = nur ausgewaehltes Display aktiv; primary = als Hauptdisplay verwenden, andere Ausgaenge der ausgewaehlten GPU unveraendert lassen."
   resolution_width:
     name: Aufloesung Breite
     description: Display-Breite erzwingen (0 = auto)

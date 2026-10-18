@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.71
+
+### Added
+- Optional `display_output` selection by connected-display number (starting at 1) or DRM connector name, including GPU selection and connector-bound reconnect handling. Empty/`auto` preserves the previous behavior.
+- `display_mode`: choose `exclusive` (only the selected output active) or `primary` (selected output primary, other outputs on the selected GPU unchanged). Only applies to explicit display selection.
+- Startup logs list available DRM connectors and display numbers. Invalid or ambiguous selections report an error instead of falling back to another display.
+
 ## 0.1.70
 
 ### Fixed

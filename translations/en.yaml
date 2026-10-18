@@ -23,6 +23,12 @@ configuration:
   hide_header:
     name: Hide Header
     description: Hide Home Assistant header
+  display_output:
+    name: Display Selection
+    description: "Optional: auto or empty = previous behavior. Number starting at 1 from the startup log or DRM connector name (e.g. HDMI-A-1 or unambiguous card1-HDMI-A-1). Numbers count displays connected at startup; names also work with unplugged displays."
+  display_mode:
+    name: Display Mode
+    description: "Only with explicit display selection: exclusive = activate only the selected display; primary = use as primary display, leaving other outputs on the selected GPU unchanged."
   resolution_width:
     name: Resolution Width
     description: Force display width (0 = auto)

@@ -1,7 +1,7 @@
 name: HAOS Chromium Kiosk
 slug: haos-chromium-kiosk
 description: Chromium-based kiosk display for HAOS HDMI output.
-version: "0.1.70"
+version: "0.1.71"
 url: "https://github.com/speedy3wk/haos-chromium-kiosk"
 arch:
   - amd64
@@ -63,6 +63,8 @@ options:
   ha_theme: ""
   ha_sidebar: "full"
   hide_header: false
+  display_output: "auto"
+  display_mode: "exclusive"
   resolution_width: 0
   resolution_height: 0
   refresh_rate: 0
@@ -92,6 +94,8 @@ schema:
   ha_theme: str
   ha_sidebar: list(full|narrow|none|auto)
   hide_header: bool
+  display_output: str
+  display_mode: list(exclusive|primary)
   resolution_width: int(0,)
   resolution_height: int(0,)
   refresh_rate: float(0,)

@@ -37,6 +37,8 @@ load_config_var dark_mode true
 load_config_var ha_theme ""
 load_config_var ha_sidebar "full"
 load_config_var hide_header false
+load_config_var display_output "auto"
+load_config_var display_mode "exclusive"
 load_config_var resolution_width 0
 load_config_var resolution_height 0
 load_config_var refresh_rate 0
@@ -57,6 +59,16 @@ load_config_var rotate_display "normal"
 load_config_var audio_sink "auto"
 load_config_var hide_cursor true
 load_config_var debug_logging false
+
+if [ -n "$DISPLAY_OUTPUT" ] && [ "$DISPLAY_OUTPUT" != "auto" ]; then
+  case "$DISPLAY_MODE" in
+    exclusive|primary) ;;
+    *)
+      bashio::log.error "haos-kiosk: invalid display_mode='$DISPLAY_MODE' (expected exclusive or primary)"
+      exit 1
+      ;;
+  esac
+fi
 
 log_debug() {
   [ "${DEBUG_LOGGING:-false}" = "true" ] || return 0
@@ -133,6 +145,7 @@ fi
 
 bashio::log.info "haos-kiosk: url=$HA_URL_BASE"
 bashio::log.info "haos-kiosk: display=${RESOLUTION_WIDTH}x${RESOLUTION_HEIGHT}@${REFRESH_RATE}Hz  rotate=$ROTATE_DISPLAY  zoom=${ZOOM_LEVEL}%  sw_render=$SOFTWARE_RENDERING  hw_video_decode=$HW_VIDEO_DECODE"
+bashio::log.info "haos-kiosk: display_output=${DISPLAY_OUTPUT:-auto}  display_mode=$DISPLAY_MODE (only used with explicit output)"
 bashio::log.info "haos-kiosk: video: preset=$VIDEO_PROFILE_PRESET  hdr=$HDR_MODE  cs=$COLOR_SPACE  rgb=$RGB_RANGE"
 bashio::log.info "haos-kiosk: browser: dark=$DARK_MODE  sidebar=$HA_SIDEBAR  header=$HIDE_HEADER  timeout=${SCREEN_TIMEOUT}s  audio=$AUDIO_SINK"
 log_debug "haos-kiosk: ha_url=$HA_URL  dashboard=$HA_DASHBOARD  refresh=${BROWSER_REFRESH}s  mod_id=$BROWSER_MOD_ID  force_out=$FORCE_OUTPUT_ON  cursor=$HIDE_CURSOR"
@@ -210,25 +223,55 @@ selected_card=""
 selected_connector=""
 
 scan_drm_connectors() {
+  local status_path status card_port card driver connector index
+  local connected_index=0 matches=0
+  local -a connectors=() statuses=() drivers=()
   selected_card=""
   selected_connector=""
+  selected_connector_status=""
   for status_path in /sys/class/drm/card[0-9]*-*/status; do
     [ -e "$status_path" ] || continue
     status=$(cat "$status_path")
     card_port=$(basename "$(dirname "$status_path")")
     card=${card_port%%-*}
     driver=$(basename "$(readlink "/sys/class/drm/$card/device/driver")")
-    if [ -z "$selected_card" ] && [ "$status" = "connected" ]; then
+    connectors+=("$card_port")
+    statuses+=("$status")
+    drivers+=("$driver")
+    if [ "$status" = "connected" ]; then
+      connected_index=$((connected_index + 1))
+      bashio::log.info "haos-kiosk: display $connected_index: $card_port (connected)"
+    else
+      bashio::log.info "haos-kiosk: display: $card_port ($status, selectable by name)"
+    fi
+    connector="${card_port#*-}"
+    if { [ -z "${DISPLAY_OUTPUT:-}" ] || [ "$DISPLAY_OUTPUT" = "auto" ]; } &&
+      [ -z "$selected_card" ] && [ "$status" = "connected" ]; then
       selected_card="$card"
       selected_connector="$card_port"
+      selected_connector_status="$status"
+    elif [ -n "${DISPLAY_OUTPUT:-}" ] && [ "$DISPLAY_OUTPUT" != "auto" ] &&
+      { [ "$DISPLAY_OUTPUT" = "$card_port" ] || [ "$DISPLAY_OUTPUT" = "$connector" ] ||
+        { [ "$status" = "connected" ] && [ "$DISPLAY_OUTPUT" = "$connected_index" ]; }; }; then
+      selected_card="$card"
+      selected_connector="$card_port"
+      selected_connector_status="$status"
+      matches=$((matches + 1))
     fi
+  done
+  if [ -n "${DISPLAY_OUTPUT:-}" ] && [ "$DISPLAY_OUTPUT" != "auto" ] && [ "$matches" -ne 1 ]; then
+    bashio::log.error "haos-kiosk: display_output='$DISPLAY_OUTPUT' matched $matches connectors; use a listed number (starting at 1) or a unique DRM connector name"
+    return 1
+  fi
+  for index in "${!connectors[@]}"; do
     if [ "${DEBUG_LOGGING:-false}" = "true" ]; then
+      card_port="${connectors[$index]}"
       if [ "$selected_connector" = "$card_port" ]; then
         printf "  *"
       else
         printf "   "
       fi
-      printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
+      printf "%-25s%-20s%s\n" "$card_port" "${drivers[$index]}" "${statuses[$index]}"
     fi
   done
   return 0
@@ -241,6 +284,10 @@ force_drm_connectors_on() {
   for force_path in /sys/class/drm/card[0-9]*-*/force; do
     [ -e "$force_path" ] || continue
     connector=$(basename "$(dirname "$force_path")")
+    if [ -n "${DISPLAY_OUTPUT:-}" ] && [ "$DISPLAY_OUTPUT" != "auto" ] &&
+      [ "$connector" != "$selected_connector" ]; then
+      continue
+    fi
     if [ -w "$force_path" ] && echo on > "$force_path" 2>/dev/null; then
       log_debug "haos-kiosk: forced DRM connector on: $connector"
       forced_any=true
@@ -256,8 +303,8 @@ force_drm_connectors_on() {
 scan_drm_connectors
 [ -n "$selected_card" ] && bashio::log.info "haos-kiosk: GPU $selected_card  connector=$selected_connector"
 
-if [ -z "$selected_card" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
-  bashio::log.warning "haos-kiosk: no connected display detected, trying force_output_on"
+if [ "$selected_connector_status" != "connected" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
+  bashio::log.warning "haos-kiosk: selected display unavailable, trying force_output_on"
   force_drm_connectors_on
   udevadm settle --timeout=5 || true
   log_debug "haos-kiosk: rechecking DRM connector state after force"
@@ -589,9 +636,35 @@ color_overrides_requested() {
 }
 
 pick_active_output() {
-  local state
-  state="$(xrandr 2>/dev/null || true)"
-  local output
+  local state output connector connector_id=""
+  if ! state="$(xrandr --prop)"; then
+    bashio::log.warning "haos-kiosk: could not query XrandR outputs"
+    return 1
+  fi
+  if [ -n "${DISPLAY_OUTPUT:-}" ] && [ "$DISPLAY_OUTPUT" != "auto" ]; then
+    if [ -r "/sys/class/drm/$selected_connector/connector_id" ]; then
+      connector_id="$(cat "/sys/class/drm/$selected_connector/connector_id")"
+    fi
+    connector="${selected_connector#*-}"
+    # The modesetting driver calls DRM HDMI-A/B connectors HDMI in XrandR.
+    connector="${connector/HDMI-A-/HDMI-}"
+    connector="${connector/HDMI-B-/HDMI-}"
+    output="$(awk -v id="$connector_id" -v name="$connector" \
+      -v drm_name="${selected_connector#*-}" -v force="$FORCE_OUTPUT_ON" '
+      /^[^[:space:]]/ {
+        output = $1
+        available = ($2 == "connected" || (force == "true" && $2 == "disconnected"))
+        if (available && (output == name || output == drm_name)) named = output
+      }
+      $1 == "CONNECTOR_ID:" {
+        has_ids = 1
+        if (id != "" && $2 == id && available) matched = output
+      }
+      END { if (id != "" && has_ids) print matched; else print named }
+    ' <<<"$state")"
+    echo "$output"
+    return 0
+  fi
   output="$(awk '$2 == "connected" {print $1; exit}' <<<"$state")"
   if [ -z "$output" ] && [ "$FORCE_OUTPUT_ON" = true ]; then
     output="$(awk '$2 == "disconnected" {print $1; exit}' <<<"$state")"
@@ -599,11 +672,32 @@ pick_active_output() {
   echo "$output"
 }
 
+activate_selected_output() {
+  local state other
+  local -a args=(--output "$ACTIVE_OUTPUT" --auto --primary --pos 0x0)
+  if [ "$DISPLAY_MODE" = "exclusive" ]; then
+    if ! state="$(xrandr --query)"; then
+      bashio::log.error "haos-kiosk: could not query outputs for exclusive display mode"
+      return 1
+    fi
+    while IFS= read -r other; do
+      [ -n "$other" ] && [ "$other" != "$ACTIVE_OUTPUT" ] || continue
+      args+=(--output "$other" --off)
+    done < <(awk '$2 == "connected" || $2 == "disconnected" {print $1}' <<<"$state")
+  fi
+  if ! xrandr "${args[@]}"; then
+    bashio::log.error "haos-kiosk: could not activate '$ACTIVE_OUTPUT' in $DISPLAY_MODE mode"
+    return 1
+  fi
+}
+
 configure_display_output() {
   local reason="$1"
   local output
   local apply_full_color_stack=true
-  output="$(pick_active_output)"
+  if ! output="$(pick_active_output)"; then
+    return 1
+  fi
   if [ -z "$output" ]; then
     return 1
   fi
@@ -619,7 +713,12 @@ configure_display_output() {
     log_debug "haos-kiosk: passthrough color mode, leaving HDR/color/RGB range to the driver"
   fi
 
-  if [ "$FORCE_OUTPUT_ON" = true ]; then
+  if [ -n "${DISPLAY_OUTPUT:-}" ] && [ "$DISPLAY_OUTPUT" != "auto" ]; then
+    if ! activate_selected_output; then
+      ACTIVE_OUTPUT=""
+      return 1
+    fi
+  elif [ "$FORCE_OUTPUT_ON" = true ]; then
     xrandr --output "$ACTIVE_OUTPUT" --auto --primary || true
   fi
 
@@ -662,7 +761,7 @@ configure_display_output() {
 }
 
 if ! configure_display_output "startup"; then
-  bashio::log.warning "haos-kiosk: startup completed without active output; waiting for reconnect"
+  bashio::log.warning "haos-kiosk: output '${DISPLAY_OUTPUT:-auto}' not ready; waiting for reconnect"
 fi
 
 if [ "$SCREEN_TIMEOUT" -gt 0 ]; then
@@ -714,6 +813,9 @@ launch_chromium() {
   rm -f /data/chromium/SingletonLock /data/chromium/SingletonSocket /data/chromium/SingletonCookie
 
   local extra_flags=()
+  if [ -n "$DISPLAY_OUTPUT" ] && [ "$DISPLAY_OUTPUT" != "auto" ]; then
+    extra_flags+=(--window-position=0,0)
+  fi
   if [ "$SOFTWARE_RENDERING" = true ]; then
     extra_flags+=(--disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode)
   elif [ "$HW_VIDEO_DECODE" != true ]; then
@@ -891,7 +993,10 @@ log_debug "haos-kiosk: starting output reconnect monitor"
 (
   last_seen_output="$ACTIVE_OUTPUT"
   while true; do
-    current_output="$(pick_active_output)"
+    if ! current_output="$(pick_active_output)"; then
+      sleep 5
+      continue
+    fi
 
     if [ -z "$current_output" ]; then
       if [ -n "$last_seen_output" ]; then

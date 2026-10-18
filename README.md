@@ -7,6 +7,7 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - Chromium in kiosk mode on the HAOS host HDMI output
 - Optional auto-login (username/password) — the bundled extension only runs on the configured Home Assistant host
 - Screen timeout and display rotation
+- Optional display selection by number or DRM connector name, with exclusive or primary display mode
 - HDMI/USB audio sink selection
 - Hardware video decoding via VA-API on Intel/AMD GPUs (logged at startup)
 - Display reconnect monitoring — reinitializes xrandr/color/HDR settings automatically when the display is disconnected and reconnected (e.g. TV power cycle, AVR switch)
@@ -42,6 +43,8 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 ### Display Hardware
 | Option | Default | Description |
 |---|---|---|
+| `display_output` | `auto` | Optional display number (starting at 1) or DRM connector name; empty/`auto` preserves previous behavior |
+| `display_mode` | `exclusive` | Only with explicit selection: `exclusive` (only selected output active) or `primary` (selected output is primary, others unchanged) |
 | `resolution_width` / `resolution_height` | `0` | Force display resolution (0 = auto) |
 | `refresh_rate` | `0` | Force refresh rate in Hz (0 = auto; decimals like `59.94` supported) |
 | `rotate_display` | `normal` | Display rotation: `normal` \| `left` \| `right` \| `inverted` |
@@ -49,6 +52,21 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 | `audio_sink` | `auto` | Audio output: `auto` \| `hdmi` \| `usb` \| `none` |
 | `hide_cursor` | `true` | Hide the mouse cursor |
 | `force_output_on` | `false` | Force DRM connector on when no display is detected |
+
+### Selecting a Display
+
+The startup log lists DRM connectors, for example `display 1: card0-HDMI-A-1 (connected)` and `display 2: card1-DP-1 (connected)`.
+
+```yaml
+display_output: "2"
+display_mode: "exclusive"
+```
+
+- Use `"1"`, `"2"`, etc. to select a connected display in the logged scan order (sorted by DRM path, not physical port labels). Numbers are resolved once at startup; reconnecting never switches to another connector. Numbering can change across restarts if connections change.
+- Prefer a connector name such as `"HDMI-A-1"` or `"card1-DP-1"` for a display that may be disconnected at startup. An unqualified name must be unique across GPUs; use the full logged name if it is ambiguous. These are connector names, not monitor model names. GPU/card numbering can change after hardware or driver changes.
+- The selected connector determines the GPU used by Xorg. `exclusive` disables the other XrandR outputs on that GPU; `primary` leaves them unchanged and makes the selected output primary at position `0x0`. Other GPUs are not driven by this Xorg instance.
+- An unknown number/name or ambiguous name stops startup with an error instead of silently selecting a different display. A known but disconnected connector is retained while waiting for reconnect; `force_output_on` only targets that connector when explicitly selected.
+- Leave `display_output` empty or set it to `"auto"` for the previous automatic GPU/output selection. `display_mode` has no effect in this case.
 
 ### Video & Color
 | Option | Default | Description |
@@ -99,6 +117,7 @@ Explicit profile values (anything other than `auto`, `rgb`, `yuv`) set an exact 
 
 In normal operation the add-on log shows only:
 - A compact settings summary on startup (URL, display, video, browser settings)
+- Available DRM connector names and numbers for connected displays
 - Warnings and errors
 - Key runtime events (display reconnect, Chromium restart)
 
