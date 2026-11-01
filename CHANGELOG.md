@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.72
+
+### Added
+- One-click App Store repository installation from the README.
+- Native amd64 and aarch64 build checks, runtime smoke tests, and signed GHCR publishing for stable releases.
+
+### Notes
+- The repository URL, app slug and local-build installation are unchanged. Prebuilt installation will only be enabled after the release images are verified publicly accessible.
+
 ## 0.1.71
 
 ### Added
