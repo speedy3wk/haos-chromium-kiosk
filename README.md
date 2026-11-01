@@ -20,6 +20,28 @@ Large parts of the code are inspired by the HAOS Kiosk App from https://github.c
 - Extension-based UI tweaks (sidebar mode, header, theme, dark mode)
 - Clean startup log with optional verbose debug output
 
+## Installation (Custom App Repository)
+
+Requires Home Assistant OS with the Supervisor and an accessible host display. Home Assistant Container does not provide the App Store. Supported architectures: `amd64` and `aarch64`; GPU decoding support varies by hardware as described above.
+
+[![Add app repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fspeedy3wk%2Fhaos-chromium-kiosk)
+
+Click the button, confirm adding the repository, and install **HAOS Chromium Kiosk** from the App Store. The button adds the repository; it does not install or start the app automatically.
+
+Alternatively:
+
+1. In Home Assistant, go to **Settings → Apps → App Store** (called **Add-ons → Add-on Store** in older versions).
+2. Open the three-dot menu → **Repositories**.
+3. Add: `https://github.com/speedy3wk/haos-chromium-kiosk`
+4. Refresh the store and install **HAOS Chromium Kiosk**.
+
+## HACS
+This is a community app, not a custom integration. Apps are installed through the App Store, not HACS. Adding this repository is sufficient; it does not need to be included in a preinstalled repository.
+
+## Host access
+
+The app uses host networking, `SYS_ADMIN`, and the configured DRM, framebuffer, console, input and audio devices to run Xorg and Chromium on the host display. These permissions are declared in `config.yaml`; only install the app on a host where you trust it with that access. Auto-login is optional; use a dedicated, non-administrator Home Assistant user for the kiosk.
+
 ## Options
 
 ### Display & Browser
@@ -134,41 +156,3 @@ Enable `debug_logging: true` for verbose output: DRM connector details, xorg.con
 - Home Assistant 2026.2+ reorganized some dashboard paths. If the kiosk shows a redirect or blank panel, update `ha_dashboard` to match the current URL.
 - `video_profile_preset=passthrough` avoids any explicit forced color/HDR state and is the safest default.
 - Created with AI tools, reviewed and tested by me.
-
-## Installation (Custom App Repository)
-
-Requires Home Assistant OS with the Supervisor and an accessible host display. Home Assistant Container does not provide the App Store. Supported architectures: `amd64` and `aarch64`; GPU decoding support varies by hardware as described above.
-
-[![Add app repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fspeedy3wk%2Fhaos-chromium-kiosk)
-
-Click the button, confirm adding the repository, and install **HAOS Chromium Kiosk** from the App Store. The button adds the repository; it does not install or start the app automatically.
-
-Alternatively:
-
-1. In Home Assistant, go to **Settings → Apps → App Store** (called **Add-ons → Add-on Store** in older versions).
-2. Open the three-dot menu → **Repositories**.
-3. Add: `https://github.com/speedy3wk/haos-chromium-kiosk`
-4. Refresh the store and install **HAOS Chromium Kiosk**.
-
-## HACS
-This is a community app, not a custom integration. Apps are installed through the App Store, not HACS. Adding this repository is sufficient; it does not need to be included in a preinstalled repository.
-
-## Host access
-
-The app uses host networking, `SYS_ADMIN`, and the configured DRM, framebuffer, console, input and audio devices to run Xorg and Chromium on the host display. These permissions are declared in `config.yaml`; only install the app on a host where you trust it with that access. Auto-login is optional; use a dedicated, non-administrator Home Assistant user for the kiosk.
-
-## Building and publishing
-
-The **Build** workflow runs the shell regression tests and builds native `amd64` and `aarch64` images on pushes, pull requests and manual runs. These builds do not publish packages. Publishing a non-prerelease GitHub release builds and signs both images and publishes a signed multi-architecture manifest to GHCR.
-
-Release tags must match `config.yaml`, either `v0.1.71` or `0.1.71` for version `0.1.71`. Container tags use the version **without** the `v` prefix, matching the tag the Supervisor requests.
-
-The app's current configuration points to the multi-architecture GHCR image. To avoid publishing a config that references an image that is not yet available, prepare each new release on a branch:
-
-1. Update `version` in `config.yaml` and `CHANGELOG.md`; keep `image: "ghcr.io/speedy3wk/haos-chromium-kiosk"` set.
-2. Open and validate a pull request. Before merging it, publish the matching GitHub release targeting that pull request's branch (the tag must match the configuration version, with or without a `v` prefix).
-3. Wait for the **Build** workflow, including the manifest job, to succeed. It publishes the version tag and `latest` for both architectures.
-4. Verify anonymous pulls of `amd64-haos-chromium-kiosk:<version>`, `aarch64-haos-chromium-kiosk:<version>` and `haos-chromium-kiosk:<version>`, plus their `latest` tags. No registry login should be required on a user's Home Assistant instance.
-5. Once the images are available, merge the pull request. The App Store will then see a config version backed by a published image.
-
-On the first release using prebuilt images, check that the three GHCR packages (`amd64-haos-chromium-kiosk`, `aarch64-haos-chromium-kiosk`, and `haos-chromium-kiosk`) are **Public**. A public GitHub repository does not automatically make new GHCR packages public. If anonymous pulls fail, make the packages public in their package settings before merging.
