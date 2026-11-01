@@ -143,7 +143,7 @@ In normal operation the add-on log shows only:
 Enable `debug_logging: true` for verbose output: DRM connector details, xorg.conf, xrandr property queries, connectivity checks, and all internal state changes.
 
 ## Notes
-- Auto-login and UI tweaks are injected via a bundled Chromium extension, loaded with `--load-extension`. Google Chrome ignores this flag since version 137, but the unbranded Alpine Chromium build still supports it.
+
 - Since Home Assistant 2026.2 the selected theme is stored in the user profile on the server. If the kiosk user has saved a theme there, it overrides `ha_theme`/`dark_mode`. Use a dedicated kiosk user without a saved theme preference.
 - Home Assistant 2026.2+ reorganized some dashboard paths. If the kiosk shows a redirect or blank panel, update `ha_dashboard` to match the current URL.
 - `video_profile_preset=passthrough` avoids any explicit forced color/HDR state and is the safest default.
