@@ -35,9 +35,6 @@ Alternatively:
 3. Add: `https://github.com/speedy3wk/haos-chromium-kiosk`
 4. Refresh the store and install **HAOS Chromium Kiosk**.
 
-## HACS
-This is a community app, not a custom integration. Apps are installed through the App Store, not HACS. Adding this repository is sufficient; it does not need to be included in a preinstalled repository.
-
 ## Host access
 
 The app uses host networking, `SYS_ADMIN`, and the configured DRM, framebuffer, console, input and audio devices to run Xorg and Chromium on the host display. These permissions are declared in `config.yaml`; only install the app on a host where you trust it with that access. Auto-login is optional; use a dedicated, non-administrator Home Assistant user for the kiosk.
@@ -144,11 +141,6 @@ In normal operation the add-on log shows only:
 - Key runtime events (display reconnect, Chromium restart)
 
 Enable `debug_logging: true` for verbose output: DRM connector details, xorg.conf, xrandr property queries, connectivity checks, and all internal state changes.
-
-### Startup troubleshooting
-- **0.1.69 stops after the connectivity checks:** DRM connector scanning could exit the add-on when `debug_logging` was `false`, before Xorg started. Fixed in 0.1.70.
-- **`Connection refused` for Home Assistant:** These connectivity checks only warn; they do not stop startup. Verify that Home Assistant has finished starting and that `ha_url` uses its actual address, port and HTTP/HTTPS scheme.
-- **UTM/virtual machines:** CPU hardware virtualization does not by itself provide GPU acceleration or VA-API video decoding to the guest. The add-on needs a usable guest DRM device and display output; use the DRM/Xorg startup logs to diagnose graphics separately from connectivity.
 
 ## Notes
 - Auto-login and UI tweaks are injected via a bundled Chromium extension, loaded with `--load-extension`. Google Chrome ignores this flag since version 137, but the unbranded Alpine Chromium build still supports it.
