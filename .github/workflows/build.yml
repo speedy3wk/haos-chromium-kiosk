@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  ARCHITECTURES: '["amd64", "aarch64"]'
+  IMAGE_NAME: haos-chromium-kiosk
+
+jobs:
+  init:
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version and run regression tests
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(sed -n 's/^version: "\([^"]*\)"$/\1/p' config.yaml)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::config.yaml must declare one quoted numeric version"
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == release && "${RELEASE_TAG#v}" != "$version" ]]; then
+            echo "::error::Release tag does not match config.yaml version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          bash -n run.sh
+          bash tests/drm-scan.sh
+          bash tests/display-selection.sh
+      - name: Prepare native build matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.09.0
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          image-name: ${{ env.IMAGE_NAME }}
+
+  build:
+    needs: init
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.init.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and optionally publish image
+        uses: home-assistant/builder/actions/build-image@2026.09.0
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image: ${{ matrix.image }}
+          image-tags: ${{ needs.init.outputs.version }}
+          version: ${{ needs.init.outputs.version }}
+          push: ${{ github.event_name == 'release' }}
+          load: ${{ github.event_name != 'release' }}
+          labels: |
+            io.hass.type=app
+            org.opencontainers.image.title=HAOS Chromium Kiosk
+            org.opencontainers.image.description=Chromium-based kiosk display for HAOS HDMI output
+            org.opencontainers.image.licenses=MIT
+      - name: Smoke-test packaged runtime without host devices
+        env:
+          IMAGE: ${{ matrix.image }}
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          docker run --rm --entrypoint /bin/sh "$IMAGE:$VERSION" -ec '
+            command -v chromium
+            command -v Xorg
+            command -v xrandr
+            command -v bashio
+            test -x /run.sh
+            test -f /haos-extension/manifest.json
+            test -f /etc/X11/xorg.conf.default
+            chromium --version
+          '
+
+  manifest:
+    if: github.event_name == 'release'
+    needs: [init, build]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - name: Publish and sign multi-arch manifest
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.09.0
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: ${{ env.IMAGE_NAME }}
+          image-tags: ${{ needs.init.outputs.version }}
