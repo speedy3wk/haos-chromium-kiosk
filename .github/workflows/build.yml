@@ -18,12 +18,12 @@ env:
 jobs:
   init:
     if: github.event_name != 'release' || !github.event.release.prerelease
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Check version and run regression tests
         id: version
         env:
@@ -60,14 +60,16 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.init.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Build and optionally publish image
         uses: home-assistant/builder/actions/build-image@2026.09.0
         with:
           arch: ${{ matrix.arch }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           image: ${{ matrix.image }}
-          image-tags: ${{ needs.init.outputs.version }}
+          image-tags: |
+            ${{ needs.init.outputs.version }}
+            latest
           version: ${{ needs.init.outputs.version }}
           push: ${{ github.event_name == 'release' }}
           load: ${{ github.event_name != 'release' }}
@@ -95,7 +97,7 @@ jobs:
   manifest:
     if: github.event_name == 'release'
     needs: [init, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
       id-token: write
@@ -106,4 +108,6 @@ jobs:
           architectures: ${{ env.ARCHITECTURES }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           image-name: ${{ env.IMAGE_NAME }}
-          image-tags: ${{ needs.init.outputs.version }}
+          image-tags: |
+            ${{ needs.init.outputs.version }}
+            latest

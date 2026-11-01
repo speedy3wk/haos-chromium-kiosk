@@ -163,12 +163,12 @@ The **Build** workflow runs the shell regression tests and builds native `amd64`
 
 Release tags must match `config.yaml`, either `v0.1.71` or `0.1.71` for version `0.1.71`. Container tags use the version **without** the `v` prefix, matching the tag the Supervisor requests.
 
-The existing repository URL, app slug and local-build installation remain unchanged until the first public images are verified. To enable prebuilt installation after merging the workflow:
+The app's current configuration points to the multi-architecture GHCR image. To avoid publishing a config that references an image that is not yet available, prepare each new release on a branch:
 
-1. Bump `version` in `config.yaml`, update `CHANGELOG.md`, and publish the matching GitHub release.
-2. Wait for the complete **Build** workflow, including the manifest job, to succeed.
-3. Set all three GHCR packages (`amd64-haos-chromium-kiosk`, `aarch64-haos-chromium-kiosk`, and `haos-chromium-kiosk`) to **Public** in their package settings. A public GitHub repository does not automatically make new GHCR packages public.
-4. Verify anonymous pulls of both architectures for that version. No registry login should be required on a user's Home Assistant instance.
-5. Add `image: "ghcr.io/speedy3wk/haos-chromium-kiosk"` to `config.yaml` without changing the version or slug. Never point the App Store at an image that is not yet publicly available.
+1. Update `version` in `config.yaml` and `CHANGELOG.md`; keep `image: "ghcr.io/speedy3wk/haos-chromium-kiosk"` set.
+2. Open and validate a pull request. Before merging it, publish the matching GitHub release targeting that pull request's branch (the tag must match the configuration version, with or without a `v` prefix).
+3. Wait for the **Build** workflow, including the manifest job, to succeed. It publishes the version tag and `latest` for both architectures.
+4. Verify anonymous pulls of `amd64-haos-chromium-kiosk:<version>`, `aarch64-haos-chromium-kiosk:<version>` and `haos-chromium-kiosk:<version>`, plus their `latest` tags. No registry login should be required on a user's Home Assistant instance.
+5. Once the images are available, merge the pull request. The App Store will then see a config version backed by a published image.
 
-For later versions, publish and verify the images on a release branch before merging its new `config.yaml` version into `main`, so App Store updates always reference an available image.
+On the first release using prebuilt images, check that the three GHCR packages (`amd64-haos-chromium-kiosk`, `aarch64-haos-chromium-kiosk`, and `haos-chromium-kiosk`) are **Public**. A public GitHub repository does not automatically make new GHCR packages public. If anonymous pulls fail, make the packages public in their package settings before merging.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.73
+
+### Changed
+- Use the prebuilt multi-architecture GHCR image. The release workflow publishes both the versioned image and `latest` for amd64 and aarch64.
+- Pin CI runners to Ubuntu 24.04 and update checkout to v7.
+
 ## 0.1.72
 
 ### Added
