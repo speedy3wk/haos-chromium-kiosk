@@ -1,5 +1,8 @@
 # HAOS Chromium Kiosk
 
+[![Release](https://img.shields.io/github/v/release/speedy3wk/haos-chromium-kiosk.svg)](https://github.com/speedy3wk/haos-chromium-kiosk/releases)
+[![Build](https://github.com/speedy3wk/haos-chromium-kiosk/actions/workflows/build.yml/badge.svg)](https://github.com/speedy3wk/haos-chromium-kiosk/actions/workflows/build.yml)
+
 Chromium-based kiosk add-on for HAOS HDMI output. Displays a Home Assistant dashboard in full-screen kiosk mode directly on the host display output.
 Large parts of the code are inspired by the HAOS Kiosk App from https://github.com/puterboy/HAOS-kiosk/.
 
